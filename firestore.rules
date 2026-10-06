@@ -2,9 +2,17 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+    function signedIn() {
+      return request.auth != null;
+    }
+
     function validAccountType(value) {
       return value == "host" || value == "advertiser";
+    }
+
+    function ownsTenant(tenantId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid;
     }
 
     match /users/{uid} {
@@ -49,6 +57,44 @@ service cloud.firestore {
         && request.resource.data.accountType == resource.data.accountType;
 
       allow delete: if false;
+
+      match /points/{pointId} {
+        allow create: if ownsTenant(tenantId)
+          && request.resource.data.tenantId == tenantId
+          && request.resource.data.ownerUid == request.auth.uid;
+
+        allow read: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && resource.data.tenantId == tenantId;
+
+        allow update: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.tenantId == resource.data.tenantId;
+
+        allow delete: if false;
+      }
+
+      match /screens/{screenId} {
+        allow create: if ownsTenant(tenantId)
+          && request.resource.data.tenantId == tenantId
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.playerPath == "/player/" + screenId
+          && request.resource.data.manifestVersion == 0
+          && request.resource.data.playlistStatus == "empty";
+
+        allow read: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && resource.data.tenantId == tenantId;
+
+        allow update: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.playerPath == resource.data.playerPath;
+
+        allow delete: if false;
+      }
     }
 
     match /{document=**} {

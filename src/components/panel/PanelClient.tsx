@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getCountFromServer,
+  getDoc,
+  query,
+  where,
+} from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { logoutAccount } from "@/lib/firebase/accounts";
 
@@ -12,12 +19,14 @@ type PanelProfile = {
   displayName: string;
   email: string;
   tenantName: string;
+  tenantId: string;
   accountType: "host" | "advertiser";
 };
 
 export default function PanelClient() {
   const router = useRouter();
   const [profile, setProfile] = useState<PanelProfile | null>(null);
+  const [screenCount, setScreenCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -30,6 +39,7 @@ export default function PanelClient() {
 
       try {
         const userSnap = await getDoc(doc(db, "users", user.uid));
+
         if (!userSnap.exists()) {
           setError("Seu usuário existe no Authentication, mas o perfil ainda não foi criado no Firestore.");
           setLoading(false);
@@ -42,16 +52,34 @@ export default function PanelClient() {
           accountType?: "host" | "advertiser";
         };
 
+        const tenantId = String(userData.tenantId ?? "");
         let tenantName = "Minha organização";
-        if (userData.tenantId) {
-          const tenantSnap = await getDoc(doc(db, "tenants", userData.tenantId));
-          if (tenantSnap.exists()) tenantName = String(tenantSnap.data().name ?? tenantName);
+
+        if (tenantId) {
+          const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
+          if (tenantSnap.exists()) {
+            tenantName = String(tenantSnap.data().name ?? tenantName);
+          }
+
+          window.sessionStorage.setItem(
+            "telalocal:tenant-context",
+            JSON.stringify({ tenantId, ownerUid: user.uid })
+          );
+
+          const countSnapshot = await getCountFromServer(
+            query(
+              collection(db, "tenants", tenantId, "screens"),
+              where("ownerUid", "==", user.uid)
+            )
+          );
+          setScreenCount(countSnapshot.data().count);
         }
 
         setProfile({
           displayName: userData.displayName || user.displayName || "Usuário",
           email: user.email || "",
           tenantName,
+          tenantId,
           accountType: userData.accountType || "host",
         });
         setLoading(false);
@@ -65,6 +93,7 @@ export default function PanelClient() {
   }, [router]);
 
   async function handleLogout() {
+    window.sessionStorage.removeItem("telalocal:tenant-context");
     await logoutAccount();
     router.replace("/login");
   }
@@ -95,11 +124,11 @@ export default function PanelClient() {
         <div className="brand">Tela<span>Local</span></div>
         <div className="tenant-label">{profile.tenantName}</div>
         <div style={{ marginTop: 24 }}>
-          <a className="side-link active">Visão geral</a>
-          <a className="side-link">Telas</a>
-          <a className="side-link">Campanhas</a>
-          <a className="side-link">Playlists</a>
-          <a className="side-link">Proof of Play</a>
+          <Link className="side-link active" href="/painel">Visão geral</Link>
+          <Link className="side-link" href="/painel/telas">Telas</Link>
+          <span className="side-link disabled">Campanhas</span>
+          <span className="side-link disabled">Playlists</span>
+          <span className="side-link disabled">Proof of Play</span>
         </div>
       </aside>
 
@@ -117,7 +146,7 @@ export default function PanelClient() {
         </div>
 
         <div className="stats">
-          <div className="stat"><span className="muted">Telas cadastradas</span><b>0</b></div>
+          <div className="stat"><span className="muted">Telas cadastradas</span><b>{screenCount}</b></div>
           <div className="stat"><span className="muted">Campanhas</span><b>0</b></div>
           <div className="stat"><span className="muted">Exibições hoje</span><b>0</b></div>
           <div className="stat"><span className="muted">Players online</span><b>0</b></div>
@@ -125,11 +154,23 @@ export default function PanelClient() {
 
         <div className="section">
           <h2>Primeiros passos</h2>
-          <p className="lead">Sua organização já está isolada no modelo multi-tenant. O próximo módulo será o cadastro real de telas e pontos físicos.</p>
+          <p className="lead">Sua organização já está isolada no modelo multi-tenant. Agora você pode cadastrar os pontos físicos e gerar as URLs das TVs.</p>
           <div className="grid">
-            <article className="card"><div className="eyebrow">CONTA ATIVA</div><h3>{profile.tenantName}</h3><p>Tenant criado e vinculado ao seu usuário.</p></article>
-            <article className="card"><div className="eyebrow">PRÓXIMO MÓDULO</div><h3>Cadastrar primeira tela</h3><p>Vamos gerar uma URL pública exclusiva para o Web Player.</p></article>
-            <article className="card"><div className="eyebrow">DEMO</div><h3>Player de demonstração</h3><p><Link href="/player/demo">Abrir player em tela cheia →</Link></p></article>
+            <article className="card">
+              <div className="eyebrow">CONTA ATIVA</div>
+              <h3>{profile.tenantName}</h3>
+              <p>Tenant criado e vinculado ao seu usuário.</p>
+            </article>
+            <article className="card">
+              <div className="eyebrow">{screenCount ? "REDE ATIVA" : "PRÓXIMO PASSO"}</div>
+              <h3>{screenCount ? `${screenCount} tela(s) cadastrada(s)` : "Cadastrar primeira tela"}</h3>
+              <p><Link href="/painel/telas">{screenCount ? "Gerenciar telas →" : "Cadastrar ponto e gerar URL →"}</Link></p>
+            </article>
+            <article className="card">
+              <div className="eyebrow">DEMO</div>
+              <h3>Player de demonstração</h3>
+              <p><Link href="/player/demo">Abrir player em tela cheia →</Link></p>
+            </article>
           </div>
         </div>
       </section>
