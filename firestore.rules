@@ -6,13 +6,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function validAccountType(value) {
-      return value == "host" || value == "advertiser";
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function ownsTenant(tenantId) {
-      return signedIn()
-        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid;
+    function userTenantId() {
+      return signedIn() ? userDoc().data.tenantId : null;
+    }
+
+    function belongsToTenant(tenantId) {
+      return signedIn() && userTenantId() == tenantId;
+    }
+
+    function validAccountType(value) {
+      return value == "host" || value == "advertiser";
     }
 
     match /users/{uid} {
@@ -23,8 +30,16 @@ service cloud.firestore {
         && request.resource.data.status == "active"
         && validAccountType(request.resource.data.accountType)
         && request.resource.data.keys().hasOnly([
-          "uid","email","displayName","phone","tenantId","role",
-          "accountType","status","createdAt","updatedAt"
+          "uid",
+          "email",
+          "displayName",
+          "phone",
+          "tenantId",
+          "role",
+          "accountType",
+          "status",
+          "createdAt",
+          "updatedAt"
         ]);
 
       allow read: if signedIn() && request.auth.uid == uid;
@@ -44,98 +59,31 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.status == "active"
         && request.resource.data.plan == "pilot"
-        && validAccountType(request.resource.data.accountType)
-        && request.resource.data.keys().hasOnly([
-          "name","ownerUid","accountType","status","plan","createdAt","updatedAt"
-        ]);
+        && validAccountType(request.resource.data.accountType);
 
-      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow read: if belongsToTenant(tenantId);
 
-      allow update: if signedIn()
-        && resource.data.ownerUid == request.auth.uid
+      allow update: if belongsToTenant(tenantId)
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.accountType == resource.data.accountType;
 
       allow delete: if false;
 
-      match /points/{pointId} {
-        allow create: if ownsTenant(tenantId)
+      match /{document=**} {
+        allow read: if belongsToTenant(tenantId);
+
+        allow create: if belongsToTenant(tenantId)
           && request.resource.data.tenantId == tenantId
           && request.resource.data.ownerUid == request.auth.uid;
 
-        allow read: if signedIn()
+        allow update: if belongsToTenant(tenantId)
+          && resource.data.tenantId == tenantId
           && resource.data.ownerUid == request.auth.uid
-          && resource.data.tenantId == tenantId;
-
-        allow update: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && request.resource.data.ownerUid == resource.data.ownerUid
-          && request.resource.data.tenantId == resource.data.tenantId;
-
-        allow delete: if false;
-      }
-
-      match /screens/{screenId} {
-        allow create: if ownsTenant(tenantId)
-          && request.resource.data.tenantId == tenantId
-          && request.resource.data.ownerUid == request.auth.uid
-          && request.resource.data.playerPath == "/player/" + screenId
-          && request.resource.data.manifestVersion == 0
-          && request.resource.data.playlistStatus == "empty";
-
-        allow read: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && resource.data.tenantId == tenantId;
-
-        allow update: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && request.resource.data.ownerUid == resource.data.ownerUid
           && request.resource.data.tenantId == resource.data.tenantId
-          && request.resource.data.playerPath == resource.data.playerPath;
+          && request.resource.data.ownerUid == resource.data.ownerUid;
 
         allow delete: if false;
       }
-      match /campaigns/{campaignId} {
-        allow create: if ownsTenant(tenantId)
-          && request.resource.data.tenantId == tenantId
-          && request.resource.data.ownerUid == request.auth.uid
-          && request.resource.data.status == "active"
-          && request.resource.data.mimeType == "video/mp4"
-          && request.resource.data.sizeBytes <= 60 * 1024 * 1024;
-
-        allow read: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && resource.data.tenantId == tenantId;
-
-        allow update: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && request.resource.data.ownerUid == resource.data.ownerUid
-          && request.resource.data.tenantId == resource.data.tenantId
-          && request.resource.data.mediaPath == resource.data.mediaPath;
-
-        allow delete: if false;
-      }
-
-      match /playlists/{screenId} {
-        allow create: if ownsTenant(tenantId)
-          && request.resource.data.tenantId == tenantId
-          && request.resource.data.ownerUid == request.auth.uid
-          && request.resource.data.screenId == screenId
-          && request.resource.data.status == "published";
-
-        allow read: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && resource.data.tenantId == tenantId;
-
-        allow update: if signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && request.resource.data.ownerUid == resource.data.ownerUid
-          && request.resource.data.tenantId == resource.data.tenantId
-          && request.resource.data.screenId == resource.data.screenId;
-
-        allow delete: if false;
-      }
-
     }
 
     match /{document=**} {
