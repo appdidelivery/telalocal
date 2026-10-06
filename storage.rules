@@ -17,6 +17,24 @@ service firebase.storage {
         && request.auth.uid == ownerUid;
     }
 
+    match /manifests/{screenId}/current.json {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.size <= 256 * 1024
+        && request.resource.contentType == "application/json"
+        && request.resource.metadata.ownerUid == request.auth.uid;
+
+      allow update: if request.auth != null
+        && resource.metadata.ownerUid == request.auth.uid
+        && request.resource.metadata.ownerUid == request.auth.uid
+        && request.resource.size <= 256 * 1024
+        && request.resource.contentType == "application/json";
+
+      allow delete: if request.auth != null
+        && resource.metadata.ownerUid == request.auth.uid;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

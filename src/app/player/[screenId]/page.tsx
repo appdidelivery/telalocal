@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import WebPlayer from "@/components/player/WebPlayer";
 
 export const metadata: Metadata = {
   title: "Web Player",
@@ -11,17 +12,5 @@ export default async function ScreenPlayer({
   params: Promise<{ screenId: string }>;
 }) {
   const { screenId } = await params;
-
-  return (
-    <main className="tv">
-      <div className="tv-ad">
-        <div>
-          <div className="eyebrow">TELALOCAL • TELA CONFIGURADA</div>
-          <h1>Player pronto.</h1>
-          <p>Aguardando a primeira playlist publicada.</p>
-          <small className="player-id">ID da tela: {screenId}</small>
-        </div>
-      </div>
-    </main>
-  );
+  return <WebPlayer screenId={screenId} />;
 }
