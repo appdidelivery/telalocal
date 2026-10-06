@@ -26,7 +26,8 @@ type PanelProfile = {
 export default function PanelClient() {
   const router = useRouter();
   const [profile, setProfile] = useState<PanelProfile | null>(null);
-  const [screenCount, setScreenCount] = useState(0);\n  const [campaignCount, setCampaignCount] = useState(0);
+  const [screenCount, setScreenCount] = useState(0);
+  const [campaignCount, setCampaignCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
