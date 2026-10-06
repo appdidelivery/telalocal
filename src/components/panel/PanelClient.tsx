@@ -26,7 +26,7 @@ type PanelProfile = {
 export default function PanelClient() {
   const router = useRouter();
   const [profile, setProfile] = useState<PanelProfile | null>(null);
-  const [screenCount, setScreenCount] = useState(0);
+  const [screenCount, setScreenCount] = useState(0);\n  const [campaignCount, setCampaignCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -66,13 +66,22 @@ export default function PanelClient() {
             JSON.stringify({ tenantId, ownerUid: user.uid })
           );
 
-          const countSnapshot = await getCountFromServer(
-            query(
-              collection(db, "tenants", tenantId, "screens"),
-              where("ownerUid", "==", user.uid)
-            )
-          );
-          setScreenCount(countSnapshot.data().count);
+          const [screenCountSnapshot, campaignCountSnapshot] = await Promise.all([
+            getCountFromServer(
+              query(
+                collection(db, "tenants", tenantId, "screens"),
+                where("ownerUid", "==", user.uid)
+              )
+            ),
+            getCountFromServer(
+              query(
+                collection(db, "tenants", tenantId, "campaigns"),
+                where("ownerUid", "==", user.uid)
+              )
+            ),
+          ]);
+          setScreenCount(screenCountSnapshot.data().count);
+          setCampaignCount(campaignCountSnapshot.data().count);
         }
 
         setProfile({
@@ -126,7 +135,7 @@ export default function PanelClient() {
         <div style={{ marginTop: 24 }}>
           <Link className="side-link active" href="/painel">Visão geral</Link>
           <Link className="side-link" href="/painel/telas">Telas</Link>
-          <span className="side-link disabled">Campanhas</span>
+          <Link className="side-link" href="/painel/campanhas">Campanhas</Link>
           <span className="side-link disabled">Playlists</span>
           <span className="side-link disabled">Proof of Play</span>
         </div>
@@ -147,7 +156,7 @@ export default function PanelClient() {
 
         <div className="stats">
           <div className="stat"><span className="muted">Telas cadastradas</span><b>{screenCount}</b></div>
-          <div className="stat"><span className="muted">Campanhas</span><b>0</b></div>
+          <div className="stat"><span className="muted">Campanhas</span><b>{campaignCount}</b></div>
           <div className="stat"><span className="muted">Exibições hoje</span><b>0</b></div>
           <div className="stat"><span className="muted">Players online</span><b>0</b></div>
         </div>

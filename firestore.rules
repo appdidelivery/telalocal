@@ -95,6 +95,27 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+      match /campaigns/{campaignId} {
+        allow create: if ownsTenant(tenantId)
+          && request.resource.data.tenantId == tenantId
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.status == "active"
+          && request.resource.data.mimeType == "video/mp4"
+          && request.resource.data.sizeBytes <= 60 * 1024 * 1024;
+
+        allow read: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && resource.data.tenantId == tenantId;
+
+        allow update: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.tenantId == resource.data.tenantId
+          && request.resource.data.mediaPath == resource.data.mediaPath;
+
+        allow delete: if false;
+      }
+
     }
 
     match /{document=**} {
