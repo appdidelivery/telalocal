@@ -1,10 +1,101 @@
 import Link from "next/link";
-const schema={"@context":"https://schema.org","@type":"SoftwareApplication","name":"TelaLocal","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"Plataforma de mídia indoor para gestão e exibição de publicidade em Smart TVs de estabelecimentos comerciais.","offers":{"@type":"Offer","price":"0","priceCurrency":"BRL","description":"Cadastro inicial para pontos parceiros"}};
-export default function Home(){return <>
-<script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(schema)}} />
-<header className="wrap nav"><div className="brand">Tela<span>Local</span></div><nav className="navlinks"><a href="#como-funciona">Como funciona</a><a href="#para-quem">Para quem</a><Link className="btn ghost" href="/painel">Acessar painel</Link></nav></header>
-<main><section className="wrap hero"><div><div className="eyebrow">Mídia indoor • DOOH local</div><h1>Sua TV pode virar mídia. Seu bairro pode virar audiência.</h1><p>Uma plataforma para conectar estabelecimentos, anunciantes e operadores de mídia local. Sem pendrive, sem espelhamento e sem instalação complexa: o conteúdo roda direto pela URL da Smart TV e continua mesmo com oscilações de internet.</p><div className="cta"><Link className="btn primary" href="/cadastro?perfil=lojista">Quero monetizar minha TV</Link><Link className="btn ghost" href="/cadastro?perfil=anunciante">Quero anunciar localmente</Link></div></div><div className="screen"><div className="screen-inner"><span className="eyebrow">PLAYER ATIVO</span><strong>Conteúdo certo.<br/>No ponto certo.</strong><small>Playlist local • cache offline • Proof of Play</small></div></div></section>
-<section id="como-funciona" className="wrap section"><h2>Do painel para a tela, sem atrito.</h2><p className="lead">A rede é administrada na nuvem e cada TV recebe uma URL única. O player baixa a programação e mantém o loop localmente.</p><div className="grid">{[["1","Cadastre o ponto","Adicione estabelecimento, tela e informações comerciais."],["2","Monte a programação","Vincule vídeos, campanhas e cotas à playlist de cada tela."],["3","Meça as exibições","Cada execução concluída gera uma prova de exibição para auditoria."]].map(([n,t,p])=><article className="card" key={n}><div className="number">{n}</div><h3>{t}</h3><p>{p}</p></article>)}</div></section>
-<section id="para-quem" className="wrap section"><h2>Uma rede local com três lados ganhando.</h2><div className="grid"><article className="card"><h3>Estabelecimentos</h3><p>Barbearias, padarias, bares, oficinas e clínicas transformam tempo de tela em ativo comercial.</p></article><article className="card"><h3>Anunciantes locais</h3><p>Empresas divulgam ofertas para pessoas que já estão fisicamente na região de interesse.</p></article><article className="card"><h3>Operadores</h3><p>Gestão centralizada de telas, campanhas, playlists e relatórios de exibição.</p></article></div></section>
-<section className="wrap section"><div className="banner"><div><h2>Quer participar da primeira rede?</h2><p>Cadastre seu estabelecimento ou anunciante e acompanhe tudo pelo painel.</p></div><Link className="btn primary" href="/cadastro">Começar cadastro</Link></div></section></main>
-<footer className="wrap footer">© 2026 TelaLocal. MVP de plataforma de mídia indoor para comércio local.</footer></>}
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "TelaLocal",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  description:
+    "Plataforma de mídia indoor para gestão e exibição de publicidade em Smart TVs de estabelecimentos comerciais.",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "BRL",
+    description: "Cadastro inicial para pontos parceiros",
+  },
+};
+
+export default function Home() {
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      />
+      <header className="wrap nav">
+        <div className="brand">Tela<span>Local</span></div>
+        <nav className="navlinks">
+          <a href="#como-funciona">Como funciona</a>
+          <a href="#para-quem">Para quem</a>
+          <Link className="btn ghost" href="/login">Acessar painel</Link>
+        </nav>
+      </header>
+
+      <main>
+        <section className="wrap hero">
+          <div>
+            <div className="eyebrow">Mídia indoor • DOOH local</div>
+            <h1>Sua TV pode virar mídia. Seu bairro pode virar audiência.</h1>
+            <p>
+              Uma plataforma para conectar estabelecimentos, anunciantes e operadores de mídia local.
+              Sem pendrive, sem espelhamento e sem instalação complexa: o conteúdo roda direto pela
+              URL da Smart TV e continua mesmo com oscilações de internet.
+            </p>
+            <div className="cta">
+              <Link className="btn primary" href="/cadastro?perfil=lojista">Quero monetizar minha TV</Link>
+              <Link className="btn ghost" href="/cadastro?perfil=anunciante">Quero anunciar localmente</Link>
+            </div>
+          </div>
+          <div className="screen">
+            <div className="screen-inner">
+              <span className="eyebrow">PLAYER ATIVO</span>
+              <strong>Conteúdo certo.<br />No ponto certo.</strong>
+              <small>Playlist local • cache offline • Proof of Play</small>
+            </div>
+          </div>
+        </section>
+
+        <section id="como-funciona" className="wrap section">
+          <h2>Do painel para a tela, sem atrito.</h2>
+          <p className="lead">
+            A rede é administrada na nuvem e cada TV recebe uma URL única.
+            O player baixa a programação e mantém o loop localmente.
+          </p>
+          <div className="grid">
+            {[
+              ["1","Cadastre o ponto","Adicione estabelecimento, tela e informações comerciais."],
+              ["2","Monte a programação","Vincule vídeos, campanhas e cotas à playlist de cada tela."],
+              ["3","Meça as exibições","Cada execução concluída gera uma prova de exibição para auditoria."]
+            ].map(([n,t,p]) => (
+              <article className="card" key={n}>
+                <div className="number">{n}</div><h3>{t}</h3><p>{p}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="para-quem" className="wrap section">
+          <h2>Uma rede local com três lados ganhando.</h2>
+          <div className="grid">
+            <article className="card"><h3>Estabelecimentos</h3><p>Barbearias, padarias, bares, oficinas e clínicas transformam tempo de tela em ativo comercial.</p></article>
+            <article className="card"><h3>Anunciantes locais</h3><p>Empresas divulgam ofertas para pessoas que já estão fisicamente na região de interesse.</p></article>
+            <article className="card"><h3>Operadores</h3><p>Gestão centralizada de telas, campanhas, playlists e relatórios de exibição.</p></article>
+          </div>
+        </section>
+
+        <section className="wrap section">
+          <div className="banner">
+            <div>
+              <h2>Quer participar da primeira rede?</h2>
+              <p>Cadastre seu estabelecimento ou anunciante e acompanhe tudo pelo painel.</p>
+            </div>
+            <Link className="btn primary" href="/cadastro">Começar cadastro</Link>
+          </div>
+        </section>
+      </main>
+
+      <footer className="wrap footer">© 2026 TelaLocal. Plataforma de mídia indoor para comércio local.</footer>
+    </>
+  );
+}

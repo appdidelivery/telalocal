@@ -1,3 +1,26 @@
-import Link from "next/link";
-export const metadata={title:"Cadastro",description:"Cadastre seu estabelecimento ou anunciante na rede TelaLocal."};
-export default function Cadastro(){return <main className="wrap"><div className="form"><div className="brand">Tela<span>Local</span></div><h1>Comece seu cadastro</h1><p className="muted">MVP demonstrativo. Nesta fase os dados ainda não são enviados ao Firebase.</p><div className="field"><label>Perfil</label><select defaultValue="lojista"><option value="lojista">Lojista / ponto parceiro</option><option value="anunciante">Anunciante local</option><option value="operador">Operador de mídia</option></select></div><div className="field"><label>Nome</label><input placeholder="Seu nome" /></div><div className="field"><label>Empresa</label><input placeholder="Nome do estabelecimento" /></div><div className="field"><label>E-mail</label><input type="email" placeholder="voce@empresa.com.br" /></div><div className="field"><label>WhatsApp</label><input placeholder="(47) 99999-9999" /></div><div className="cta"><Link href="/painel" className="btn primary">Entrar no painel demo</Link><Link href="/" className="btn ghost">Voltar</Link></div></div></main>}
+import type { Metadata } from "next";
+import SignupForm from "@/components/auth/SignupForm";
+import type { PublicAccountType } from "@/lib/firebase/accounts";
+
+export const metadata: Metadata = {
+  title: "Cadastro",
+  description: "Cadastre seu estabelecimento ou anunciante na rede de mídia indoor TelaLocal.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/cadastro" },
+};
+
+export default async function Cadastro({
+  searchParams,
+}: {
+  searchParams: Promise<{ perfil?: string }>;
+}) {
+  const params = await searchParams;
+  const initialProfile: PublicAccountType =
+    params.perfil === "anunciante" ? "advertiser" : "host";
+
+  return (
+    <main className="wrap">
+      <SignupForm initialProfile={initialProfile} />
+    </main>
+  );
+}
