@@ -58,8 +58,16 @@ const MEDIA_CACHE = "telalocal-media-v1";
 const LAST_SYNC_PREFIX = "telalocal:proof-last-sync:";
 const SYNC_INTERVAL_MS = 60 * 60 * 1000;
 
+function hasIndexedDb() {
+  return typeof indexedDB !== "undefined";
+}
+
 function openDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
+    if (!hasIndexedDb()) {
+      reject(new Error("indexeddb/not-supported"));
+      return;
+    }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = () => {
@@ -86,6 +94,7 @@ function randomBatchId(screenId: string) {
 }
 
 export async function saveManifest(manifest: PlayerManifest) {
+  if (!hasIndexedDb()) return;
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(MANIFEST_STORE, "readwrite");
@@ -97,6 +106,7 @@ export async function saveManifest(manifest: PlayerManifest) {
 }
 
 export async function readManifest(screenId: string) {
+  if (!hasIndexedDb()) return undefined;
   const db = await openDb();
   const result = await new Promise<PlayerManifest | undefined>((resolve, reject) => {
     const tx = db.transaction(MANIFEST_STORE, "readonly");
@@ -140,6 +150,7 @@ export async function queueProofOfPlay(input: {
   campaignId: string;
   manifestVersion: number;
 }) {
+  if (!hasIndexedDb()) return;
   const db = await openDb();
   const now = Date.now();
   const record: ProofLog = {
@@ -160,6 +171,7 @@ export async function queueProofOfPlay(input: {
 }
 
 async function readProofLogs() {
+  if (!hasIndexedDb()) return [];
   const db = await openDb();
   const logs = await new Promise<ProofLog[]>((resolve, reject) => {
     const tx = db.transaction(LOG_STORE, "readonly");
@@ -172,6 +184,7 @@ async function readProofLogs() {
 }
 
 async function assignBatch(logs: ProofLog[], batchId: string, batchCreatedAt: string) {
+  if (!hasIndexedDb()) return;
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(LOG_STORE, "readwrite");
@@ -188,6 +201,7 @@ async function assignBatch(logs: ProofLog[], batchId: string, batchCreatedAt: st
 }
 
 async function deleteProofLogs(ids: string[]) {
+  if (!hasIndexedDb()) return;
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(LOG_STORE, "readwrite");
@@ -337,6 +351,9 @@ export async function cacheManifestMedia(manifest: PlayerManifest) {
 }
 
 export async function getPlayableUrl(mediaUrl: string) {
+  // Em Smart TVs/Box TV, blob: URLs podem travar o decoder após o primeiro ciclo.
+  // Quando há internet, priorizamos sempre a URL direta da CDN.
+  if (typeof navigator !== "undefined" && navigator.onLine) return mediaUrl;
   if (!("caches" in window)) return mediaUrl;
 
   const cache = await caches.open(MEDIA_CACHE);
