@@ -161,7 +161,16 @@ service cloud.firestore {
             "online",
             "userAgent",
             "viewport",
-            "appVersion"
+            "appVersion",
+            "browserFamily",
+            "browserVersion",
+            "compatMode",
+            "supportsServiceWorker",
+            "supportsIndexedDb",
+            "supportsCacheStorage",
+            "supportsFullscreen",
+            "h264Support",
+            "platform"
           ])
           && request.resource.data.tenantId == tenantId
           && request.resource.data.screenId == screenId
