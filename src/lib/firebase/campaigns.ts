@@ -9,13 +9,9 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import {
-  getDownloadURL,
-  ref,
-  uploadBytesResumable,
-} from "firebase/storage";
-import { db, storage } from "./client";
+import { db } from "./client";
 import { getTenantContext } from "./screens";
+import { uploadVideoToCloudinary } from "@/lib/media/cloudinary";
 
 export const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
 
@@ -25,6 +21,7 @@ export type CampaignRecord = {
   advertiserName: string;
   mediaUrl: string;
   mediaPath: string;
+  mediaProvider?: "cloudinary" | "firebase";
   fileName: string;
   sizeBytes: number;
   durationSeconds: number;
@@ -40,14 +37,6 @@ export type CreateCampaignInput = {
   file: File;
   durationSeconds: number;
 };
-
-function safeFileName(fileName: string) {
-  return fileName
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]/g, "-")
-    .replace(/-+/g, "-");
-}
 
 export async function listCampaigns(): Promise<CampaignRecord[]> {
   const context = await getTenantContext();
@@ -66,58 +55,46 @@ export async function createCampaign(
   onProgress?: (percent: number) => void
 ): Promise<CampaignRecord> {
   if (input.file.type !== "video/mp4") {
-    throw new Error("storage/invalid-format");
+    throw Object.assign(new Error("Use um arquivo MP4."), {
+      code: "media/invalid-format",
+    });
   }
 
   if (input.file.size > MAX_VIDEO_BYTES) {
-    throw new Error("storage/file-too-large");
+    throw Object.assign(
+      new Error("O MP4 deve ter no máximo 60 MB neste MVP."),
+      { code: "media/file-too-large" }
+    );
   }
 
   const context = await getTenantContext();
-  const campaignRef = doc(collection(db, "tenants", context.tenantId, "campaigns"));
-  const cleanName = safeFileName(input.file.name);
-  const mediaPath =
-    `tenants/${context.tenantId}/owners/${context.ownerUid}/campaigns/${campaignRef.id}/${cleanName}`;
+  const campaignRef = doc(
+    collection(db, "tenants", context.tenantId, "campaigns")
+  );
 
-  const storageRef = ref(storage, mediaPath);
-  const uploadTask = uploadBytesResumable(storageRef, input.file, {
-    contentType: "video/mp4",
-    cacheControl: "public,max-age=31536000,immutable",
-    customMetadata: {
-      tenantId: context.tenantId,
-      ownerUid: context.ownerUid,
-      campaignId: campaignRef.id,
-    },
-  });
+  const upload = await uploadVideoToCloudinary(
+    input.file,
+    `telalocal/${context.tenantId}/campaigns/${campaignRef.id}`,
+    onProgress
+  );
 
-  await new Promise<void>((resolve, reject) => {
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const percent =
-          snapshot.totalBytes > 0
-            ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-            : 0;
-        onProgress?.(percent);
-      },
-      reject,
-      resolve
-    );
-  });
-
-  const mediaUrl = await getDownloadURL(storageRef);
+  const durationSeconds =
+    upload.duration && upload.duration > 0
+      ? upload.duration
+      : input.durationSeconds;
 
   const record = {
     tenantId: context.tenantId,
     ownerUid: context.ownerUid,
     name: input.name.trim(),
     advertiserName: input.advertiserName.trim(),
-    mediaUrl,
-    mediaPath,
+    mediaUrl: upload.secureUrl,
+    mediaPath: upload.publicId,
+    mediaProvider: "cloudinary" as const,
     fileName: input.file.name,
     mimeType: "video/mp4",
-    sizeBytes: input.file.size,
-    durationSeconds: Math.round(input.durationSeconds * 10) / 10,
+    sizeBytes: upload.bytes || input.file.size,
+    durationSeconds: Math.round(durationSeconds * 10) / 10,
     status: "active" as const,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
