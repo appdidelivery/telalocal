@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Image from "next/image";\nimport Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
@@ -140,14 +140,14 @@ export default function PanelClient() {
   }
 
   if (loading) {
-    return <main className="auth-loading"><div><div className="brand">Tela<span>Local</span></div><p className="muted">Carregando seu painel...</p></div></main>;
+    return <main className="auth-loading"><div><Image src="/telalocal-logo.svg" alt="TelaLocal" width={220} height={60} priority style={{ width: 190, height: "auto" }} /><p className="muted">Carregando seu painel...</p></div></main>;
   }
 
   if (error || !profile) {
     return (
       <main className="wrap">
         <div className="form">
-          <div className="brand">Tela<span>Local</span></div>
+          <Image src="/telalocal-logo.svg" alt="TelaLocal" width={220} height={60} priority style={{ width: 190, height: "auto" }} />
           <h1>Precisamos concluir seu acesso</h1>
           <p className="message error">{error}</p>
           <div className="cta">
@@ -162,7 +162,7 @@ export default function PanelClient() {
   return (
     <main className="panel-shell">
       <aside className="sidebar">
-        <div className="brand">Tela<span>Local</span></div>
+        <Image src="/telalocal-logo.svg" alt="TelaLocal" width={220} height={60} priority style={{ width: 190, height: "auto" }} />
         <div className="tenant-label">{profile.tenantName}</div>
         <div style={{ marginTop: 24 }}>
           <Link className="side-link active" href="/painel">Visão geral</Link>
