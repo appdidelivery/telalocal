@@ -6,7 +6,9 @@ on:
       - main
     paths:
       - "firestore.rules"
+      - "storage.rules"
       - ".github/scripts/deploy-firestore-rules.mjs"
+      - ".github/scripts/deploy-storage-rules.mjs"
       - ".github/workflows/firebase-rules.yml"
   workflow_dispatch:
 
@@ -18,8 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy-firestore:
-    name: Deploy Firestore rules
+  deploy-rules:
+    name: Deploy Firebase rules
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -52,9 +54,13 @@ jobs:
           chmod 600 "$CREDENTIALS_FILE"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE" >> "$GITHUB_ENV"
           echo "FIREBASE_PROJECT_ID=telalocal" >> "$GITHUB_ENV"
+          echo "FIREBASE_STORAGE_BUCKET=telalocal.firebasestorage.app" >> "$GITHUB_ENV"
 
       - name: Install Firebase Admin SDK
         run: npm install --no-save firebase-admin
 
       - name: Deploy Firestore rules
         run: node .github/scripts/deploy-firestore-rules.mjs
+
+      - name: Deploy Storage rules
+        run: node .github/scripts/deploy-storage-rules.mjs
