@@ -19,6 +19,13 @@ export function firebaseErrorMessage(error: unknown) {
     "storage/retry-limit-exceeded": "O upload demorou demais. Tente novamente.",
     "storage/invalid-format": "Use um arquivo MP4.",
     "storage/file-too-large": "O MP4 deve ter no máximo 60 MB neste MVP.",
+    "media/invalid-format": "Use um arquivo MP4.",
+    "media/file-too-large": "O MP4 deve ter no máximo 60 MB neste MVP.",
+    "cloudinary/not-configured": "O serviço de mídia ainda não está configurado.",
+    "cloudinary/network-error": "Falha de rede durante o upload. Tente novamente.",
+    "cloudinary/timeout": "O upload demorou mais de 2 minutos. Tente novamente.",
+    "cloudinary/upload-failed": "O serviço de mídia recusou o upload. Tente novamente.",
+    "cloudinary/invalid-response": "O serviço de mídia não retornou uma URL válida.",
   };
 
   return messages[code] ?? "Não foi possível concluir a operação. Tente novamente.";
