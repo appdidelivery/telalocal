@@ -161,6 +161,7 @@ export default function PanelClient() {
           <Link className="side-link active" href="/painel">Visão geral</Link>
           <Link className="side-link" href="/painel/telas">Telas</Link>
           <Link className="side-link" href="/painel/criar-conteudo">Criar conteúdo</Link>
+          <Link className="side-link" href="/painel/brand-kit">Brand Kit</Link>
           <Link className="side-link" href="/painel/campanhas">Campanhas</Link>
           <Link className="side-link" href="/painel/playlists">Playlists</Link>
           <Link className="side-link" href="/painel/proof-of-play">Proof of Play</Link>

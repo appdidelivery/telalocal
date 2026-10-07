@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { createImageCampaign } from "@/lib/firebase/campaigns";
+import { loadBrandKit, type BrandKit } from "@/lib/firebase/brandKit";
 import { firebaseErrorMessage } from "@/lib/firebase/errors";
 
 type Preset = {
@@ -131,6 +132,13 @@ async function fileToBitmap(file: File) {
   return createImageBitmap(file);
 }
 
+async function urlToBitmap(url: string) {
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) throw new Error("brand/logo-load-failed");
+  const blob = await response.blob();
+  return createImageBitmap(blob);
+}
+
 function canvasToFile(canvas: HTMLCanvasElement, filename: string) {
   return new Promise<File>((resolve, reject) => {
     canvas.toBlob(
@@ -155,6 +163,7 @@ export default function TemplateStudioClient() {
     [presetId]
   );
 
+  const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
   const [niche, setNiche] = useState("Hamburgueria");
   const [advertiserName, setAdvertiserName] = useState("Negócio Exemplo");
   const [campaignName, setCampaignName] = useState("Campanha promocional");
@@ -173,8 +182,22 @@ export default function TemplateStudioClient() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
-      if (!user) router.replace("/login");
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      try {
+        const brand = await loadBrandKit();
+        setBrandKit(brand);
+
+        if (brand.businessName) setAdvertiserName(brand.businessName);
+        if (brand.niche) setNiche(brand.niche);
+        if (brand.whatsappNumber) setWhatsappNumber(brand.whatsappNumber);
+      } catch {
+        // O Studio continua utilizável mesmo sem Brand Kit.
+      }
     });
   }, [router]);
 
@@ -195,6 +218,9 @@ export default function TemplateStudioClient() {
     return () => URL.revokeObjectURL(url);
   }, [photo]);
 
+  const activeAccent = brandKit?.primaryColor || preset.accent;
+  const activeAccent2 = brandKit?.secondaryColor || preset.accent2;
+
   async function renderTemplate() {
     const canvas = document.createElement("canvas");
     canvas.width = 1920;
@@ -206,7 +232,7 @@ export default function TemplateStudioClient() {
     const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
     gradient.addColorStop(0, "#07111f");
     gradient.addColorStop(0.65, "#0e1b2c");
-    gradient.addColorStop(1, preset.accent2);
+    gradient.addColorStop(1, activeAccent2);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 1920, 1080);
 
@@ -233,11 +259,37 @@ export default function TemplateStudioClient() {
       bitmap.close();
     }
 
-    ctx.fillStyle = preset.accent;
+    if (brandKit?.logoUrl) {
+      try {
+        const logo = await urlToBitmap(brandKit.logoUrl);
+        const maxW = 310;
+        const maxH = 150;
+        const scale = Math.min(maxW / logo.width, maxH / logo.height, 1);
+        const drawW = logo.width * scale;
+        const drawH = logo.height * scale;
+
+        ctx.fillStyle = "rgba(255,255,255,.96)";
+        ctx.beginPath();
+        ctx.roundRect(1480, 70, 350, 190, 28);
+        ctx.fill();
+        ctx.drawImage(
+          logo,
+          1480 + (350 - drawW) / 2,
+          70 + (190 - drawH) / 2,
+          drawW,
+          drawH
+        );
+        logo.close();
+      } catch {
+        // Se a logo não carregar, a peça continua sem ela.
+      }
+    }
+
+    ctx.fillStyle = activeAccent;
     ctx.fillRect(110, 105, 150, 10);
 
     ctx.font = "700 34px Arial, sans-serif";
-    ctx.fillStyle = preset.accent;
+    ctx.fillStyle = activeAccent;
     ctx.fillText(preset.kicker, 110, 185);
 
     ctx.font = "800 44px Arial, sans-serif";
@@ -250,7 +302,7 @@ export default function TemplateStudioClient() {
 
     if (price.trim()) {
       ctx.font = "900 88px Arial, sans-serif";
-      ctx.fillStyle = preset.accent;
+      ctx.fillStyle = activeAccent;
       ctx.fillText(price.trim(), 110, 755);
     }
 
@@ -258,7 +310,7 @@ export default function TemplateStudioClient() {
     ctx.fillStyle = "#c9d8e7";
     wrapText(ctx, subtitle || preset.subtitle, 110, price.trim() ? 835 : 735, 850, 52, 2);
 
-    ctx.fillStyle = preset.accent;
+    ctx.fillStyle = activeAccent;
     ctx.beginPath();
     ctx.roundRect(110, 915, 610, 92, 24);
     ctx.fill();
@@ -336,6 +388,7 @@ export default function TemplateStudioClient() {
           </p>
         </div>
         <div className="screen-actions">
+          <Link className="btn ghost" href="/painel/brand-kit">Brand Kit</Link>
           <Link className="btn ghost" href="/painel/campanhas">Enviar vídeo MP4</Link>
           <Link className="btn ghost" href="/painel">← Voltar</Link>
         </div>
@@ -453,13 +506,18 @@ export default function TemplateStudioClient() {
           <div
             className="template-preview"
             style={{
-              ["--tpl-accent" as string]: preset.accent,
-              ["--tpl-accent2" as string]: preset.accent2,
+              ["--tpl-accent" as string]: activeAccent,
+              ["--tpl-accent2" as string]: activeAccent2,
               backgroundImage: photoPreview
                 ? `linear-gradient(90deg,rgba(7,17,31,.98) 0%,rgba(7,17,31,.85) 48%,rgba(7,17,31,.15) 100%),url("${photoPreview}")`
                 : undefined,
             }}
           >
+            {brandKit?.logoUrl ? (
+              <div className="template-brand-logo">
+                <img src={brandKit.logoUrl} alt="" />
+              </div>
+            ) : null}
             <div className="template-preview-copy">
               <span className="template-kicker">{preset.kicker}</span>
               <small>{advertiserName || niche}</small>
@@ -473,6 +531,20 @@ export default function TemplateStudioClient() {
               <small>dinâmico</small>
             </div>
           </div>
+
+          {brandKit?.businessName ? (
+            <div className="brand-kit-applied">
+              <span>Brand Kit aplicado</span>
+              <strong>{brandKit.businessName}</strong>
+              <Link href="/painel/brand-kit">Editar</Link>
+            </div>
+          ) : (
+            <div className="brand-kit-applied empty">
+              <span>Quer ganhar tempo?</span>
+              <strong>Cadastre sua marca uma única vez.</strong>
+              <Link href="/painel/brand-kit">Configurar Brand Kit</Link>
+            </div>
+          )}
 
           <div className="card template-help">
             <div className="eyebrow">PADRÃO TELALOCAL</div>
