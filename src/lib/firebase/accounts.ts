@@ -89,7 +89,5 @@ export async function requestPasswordReset(email: string) {
     });
   }
 
-  await sendPasswordResetEmail(auth, normalized, {
-    url: `${window.location.origin}/login`,
-  });
+  await sendPasswordResetEmail(auth, normalized);
 }
