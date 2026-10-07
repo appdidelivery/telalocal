@@ -41,6 +41,7 @@ export default function DeliveryPlanningClient() {
   const [screens, setScreens] = useState<ScreenRecord[]>([]);
   const [campaignId, setCampaignId] = useState("");
   const [slotSeconds, setSlotSeconds] = useState<15 | 30>(15);
+  const [budgetCredits, setBudgetCredits] = useState(10);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -91,6 +92,7 @@ export default function DeliveryPlanningClient() {
     if (!selectedCampaign) return;
 
     setSlotSeconds(selectedCampaign.slotSeconds ?? 15);
+    setBudgetCredits(selectedCampaign.budgetCredits ?? 10);
     setScheduleEnabled(Boolean(selectedCampaign.scheduleEnabled));
     setStartDate(selectedCampaign.scheduleStartDate ?? "");
     setEndDate(selectedCampaign.scheduleEndDate ?? "");
@@ -160,6 +162,7 @@ export default function DeliveryPlanningClient() {
     try {
       const delivery = await updateCampaignDelivery(selectedCampaign.id, {
         slotSeconds,
+        budgetCredits,
         scheduleEnabled,
         scheduleStartDate: startDate,
         scheduleEndDate: endDate,
@@ -254,6 +257,23 @@ export default function DeliveryPlanningClient() {
                 <option value={15}>15 segundos</option>
                 <option value={30}>30 segundos</option>
               </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="planning-budget">Orçamento em créditos</label>
+              <input
+                id="planning-budget"
+                type="number"
+                min={0}
+                max={100}
+                value={budgetCredits}
+                onChange={(event) =>
+                  setBudgetCredits(Math.max(0, Number(event.target.value || 0)))
+                }
+              />
+              <small className="file-summary">
+                No piloto, os créditos servem para distribuir o orçamento entre campanhas. A compra automática será ligada ao gateway na fase comercial.
+              </small>
             </div>
 
             <h2 className="planning-section-title">Agendamento</h2>

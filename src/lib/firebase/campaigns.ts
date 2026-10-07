@@ -3,6 +3,7 @@
 import {
   collection,
   doc,
+  getCountFromServer,
   getDocs,
   query,
   serverTimestamp,
@@ -37,6 +38,7 @@ export type CampaignRecord = {
   sizeBytes: number;
   durationSeconds: number;
   slotSeconds?: 15 | 30;
+  budgetCredits?: number;
   whatsappNumber?: string;
   couponCode?: string;
   offerText?: string;
@@ -81,6 +83,7 @@ export type CreateImageCampaignInput = {
 
 export type CampaignDeliveryInput = {
   slotSeconds: 15 | 30;
+  budgetCredits: number;
   scheduleEnabled: boolean;
   scheduleStartDate?: string;
   scheduleEndDate?: string;
@@ -122,6 +125,7 @@ function normalizedTracking(input: {
 function defaultDelivery(durationSeconds: number) {
   return {
     slotSeconds: (durationSeconds <= 15 ? 15 : 30) as 15 | 30,
+    budgetCredits: 10,
     scheduleEnabled: false,
     scheduleStartDate: "",
     scheduleEndDate: "",
@@ -135,6 +139,29 @@ function defaultDelivery(durationSeconds: number) {
     targetScreenIds: [] as string[],
   };
 }
+
+
+async function ensureCampaignLimit() {
+  const context = await getTenantContext();
+  const count = await getCountFromServer(
+    query(
+      collection(db, "tenants", context.tenantId, "campaigns"),
+      where("ownerUid", "==", context.ownerUid)
+    )
+  );
+
+  if (count.data().count >= PLAN_LIMITS.pilot.campaigns) {
+    throw Object.assign(
+      new Error(
+        `O plano piloto permite até ${PLAN_LIMITS.pilot.campaigns} campanhas.`
+      ),
+      { code: "campaign/plan-limit" }
+    );
+  }
+
+  return context;
+}
+
 
 export async function listCampaigns(): Promise<CampaignRecord[]> {
   const context = await getTenantContext();
@@ -167,7 +194,7 @@ export async function createCampaign(
     );
   }
 
-  const context = await getTenantContext();
+  const context = await ensureCampaignLimit();
   const campaignRef = doc(
     collection(db, "tenants", context.tenantId, "campaigns")
   );
@@ -227,7 +254,7 @@ export async function createImageCampaign(
     });
   }
 
-  const context = await getTenantContext();
+  const context = await ensureCampaignLimit();
   const campaignRef = doc(
     collection(db, "tenants", context.tenantId, "campaigns")
   );
@@ -295,6 +322,10 @@ export async function updateCampaignDelivery(
 
   const delivery = {
     slotSeconds: input.slotSeconds,
+    budgetCredits: Math.max(
+      0,
+      Math.min(PLAN_LIMITS.pilot.monthlyCredits, Number(input.budgetCredits || 0))
+    ),
     scheduleEnabled: Boolean(input.scheduleEnabled),
     scheduleStartDate: String(input.scheduleStartDate ?? ""),
     scheduleEndDate: String(input.scheduleEndDate ?? ""),

@@ -73,7 +73,7 @@ export default function PanelClient() {
           const now = new Date();
           const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-          const [screenCountSnapshot, campaignCountSnapshot, proofSnapshot] =
+          const [screenCountSnapshot, campaignCountSnapshot, proofSnapshot, heartbeatSnapshot] =
             await Promise.all([
               getCountFromServer(
                 query(
@@ -93,20 +93,27 @@ export default function PanelClient() {
                   where("date", "==", today)
                 )
               ),
+              getDocs(collection(db, "tenants", tenantId, "heartbeats")),
             ]);
 
           setScreenCount(screenCountSnapshot.data().count);
           setCampaignCount(campaignCountSnapshot.data().count);
 
           let totalToday = 0;
-          const activeScreenIds = new Set<string>();
           proofSnapshot.forEach((item) => {
             const data = item.data();
             totalToday += Number(data.totalPlays ?? 0);
-            if (data.screenId) activeScreenIds.add(String(data.screenId));
           });
           setPlaysToday(totalToday);
-          setActivePlayersToday(activeScreenIds.size);
+
+          const onlineCutoff = Date.now() - 7 * 60 * 1000;
+          let onlineNow = 0;
+          heartbeatSnapshot.forEach((item) => {
+            if (Number(item.data().lastSeenAtMs ?? 0) >= onlineCutoff) {
+              onlineNow += 1;
+            }
+          });
+          setActivePlayersToday(onlineNow);
         }
 
         setProfile({
@@ -165,7 +172,13 @@ export default function PanelClient() {
           <Link className="side-link" href="/painel/brand-kit">Brand Kit</Link>
           <Link className="side-link" href="/painel/campanhas">Campanhas</Link>
           <Link className="side-link" href="/painel/playlists">Playlists</Link>
+          <Link className="side-link" href="/painel/planejamento">Agendamento e segmentação</Link>
           <Link className="side-link" href="/painel/proof-of-play">Proof of Play</Link>
+          <Link className="side-link" href="/painel/relatorios">Relatórios</Link>
+          {profile.accountType === "advertiser" ? (
+            <Link className="side-link" href="/painel/anunciante">Console do anunciante</Link>
+          ) : null}
+          <Link className="side-link" href="/painel/plano">Plano e limites</Link>
         </div>
       </aside>
 
@@ -186,7 +199,7 @@ export default function PanelClient() {
           <div className="stat"><span className="muted">Telas cadastradas</span><b>{screenCount}</b></div>
           <div className="stat"><span className="muted">Campanhas</span><b>{campaignCount}</b></div>
           <div className="stat"><span className="muted">Exibições hoje</span><b>{playsToday}</b></div>
-          <div className="stat"><span className="muted">Players ativos hoje</span><b>{activePlayersToday}</b></div>
+          <div className="stat"><span className="muted">TVs online agora</span><b>{activePlayersToday}</b></div>
         </div>
 
         <div className="section">
@@ -204,9 +217,13 @@ export default function PanelClient() {
               <p><Link href="/painel/telas">{screenCount ? "Gerenciar telas →" : "Cadastrar ponto e gerar URL →"}</Link></p>
             </article>
             <article className="card">
-              <div className="eyebrow">CRIAR CONTEÚDO</div>
-              <h3>Templates prontos</h3>
-              <p><Link href="/painel/criar-conteudo">Criar peça em poucos minutos →</Link></p>
+              <div className="eyebrow">{profile.accountType === "advertiser" ? "ANUNCIANTE" : "CRIAR CONTEÚDO"}</div>
+              <h3>{profile.accountType === "advertiser" ? "Planejar campanha local" : "Templates prontos"}</h3>
+              <p>
+                <Link href={profile.accountType === "advertiser" ? "/painel/anunciante" : "/painel/criar-conteudo"}>
+                  {profile.accountType === "advertiser" ? "Abrir console do anunciante →" : "Criar peça em poucos minutos →"}
+                </Link>
+              </p>
             </article>
           </div>
         </div>
