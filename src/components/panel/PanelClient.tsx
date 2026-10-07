@@ -167,6 +167,7 @@ export default function PanelClient() {
         <div style={{ marginTop: 24 }}>
           <Link className="side-link active" href="/painel">Visão geral</Link>
           <Link className="side-link" href="/painel/telas">Telas</Link>
+          <Link className="side-link" href="/painel/alertas">Alertas da rede</Link>
           <Link className="side-link" href="/painel/parear-tv">Parear TV</Link>
           <Link className="side-link" href="/painel/criar-conteudo">Criar conteúdo</Link>
           <Link className="side-link" href="/painel/brand-kit">Brand Kit</Link>
