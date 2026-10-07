@@ -160,6 +160,7 @@ export default function PanelClient() {
         <div style={{ marginTop: 24 }}>
           <Link className="side-link active" href="/painel">Visão geral</Link>
           <Link className="side-link" href="/painel/telas">Telas</Link>
+          <Link className="side-link" href="/painel/criar-conteudo">Criar conteúdo</Link>
           <Link className="side-link" href="/painel/campanhas">Campanhas</Link>
           <Link className="side-link" href="/painel/playlists">Playlists</Link>
           <Link className="side-link" href="/painel/proof-of-play">Proof of Play</Link>
@@ -201,9 +202,9 @@ export default function PanelClient() {
               <p><Link href="/painel/telas">{screenCount ? "Gerenciar telas →" : "Cadastrar ponto e gerar URL →"}</Link></p>
             </article>
             <article className="card">
-              <div className="eyebrow">DEMO</div>
-              <h3>Player de demonstração</h3>
-              <p><Link href="/player/demo">Abrir player em tela cheia →</Link></p>
+              <div className="eyebrow">CRIAR CONTEÚDO</div>
+              <h3>Templates prontos</h3>
+              <p><Link href="/painel/criar-conteudo">Criar peça em poucos minutos →</Link></p>
             </article>
           </div>
         </div>

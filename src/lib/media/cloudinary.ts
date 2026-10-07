@@ -1,6 +1,6 @@
 "use client";
 
-export type CloudinaryVideoUpload = {
+export type CloudinaryUpload = {
   secureUrl: string;
   publicId: string;
   bytes: number;
@@ -13,11 +13,12 @@ function codedError(code: string, message: string) {
   return Object.assign(new Error(message), { code });
 }
 
-export function uploadVideoToCloudinary(
+function uploadToCloudinary(
   file: File,
   folder: string,
+  resourceType: "video" | "image",
   onProgress?: (percent: number) => void
-): Promise<CloudinaryVideoUpload> {
+): Promise<CloudinaryUpload> {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -40,7 +41,7 @@ export function uploadVideoToCloudinary(
     const xhr = new XMLHttpRequest();
     xhr.open(
       "POST",
-      `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
       true
     );
     xhr.timeout = 120000;
@@ -81,7 +82,7 @@ export function uploadVideoToCloudinary(
         reject(
           codedError(
             "cloudinary/invalid-response",
-            "O Cloudinary não retornou a URL do vídeo."
+            "O Cloudinary não retornou uma URL válida."
           )
         );
         return;
@@ -102,7 +103,7 @@ export function uploadVideoToCloudinary(
         resourceType:
           typeof payload.resource_type === "string"
             ? payload.resource_type
-            : undefined,
+            : resourceType,
       });
     };
 
@@ -124,4 +125,20 @@ export function uploadVideoToCloudinary(
 
     xhr.send(form);
   });
+}
+
+export function uploadVideoToCloudinary(
+  file: File,
+  folder: string,
+  onProgress?: (percent: number) => void
+) {
+  return uploadToCloudinary(file, folder, "video", onProgress);
+}
+
+export function uploadImageToCloudinary(
+  file: File,
+  folder: string,
+  onProgress?: (percent: number) => void
+) {
+  return uploadToCloudinary(file, folder, "image", onProgress);
 }

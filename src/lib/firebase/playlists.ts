@@ -19,7 +19,9 @@ export type PlayerManifestItem = {
   advertiserName: string;
   mediaUrl: string;
   mediaPath: string;
+  mediaType: "video" | "image";
   durationSeconds: number;
+  transition: "fade";
   conversionPath?: string;
   whatsappNumber?: string;
   couponCode?: string;
@@ -92,7 +94,9 @@ export async function publishPlaylist(
       advertiserName: campaign.advertiserName,
       mediaUrl: campaign.mediaUrl,
       mediaPath: campaign.mediaPath,
+      mediaType: campaign.mediaType === "image" ? "image" as const : "video" as const,
       durationSeconds: campaign.durationSeconds,
+      transition: "fade" as const,
       conversionPath: `/r/${token}`,
       whatsappNumber: campaign.whatsappNumber || "",
       couponCode: campaign.couponCode || "",

@@ -206,7 +206,10 @@ export default function CampaignsClient() {
           <h1>Campanhas</h1>
           <p className="muted">Envie o MP4 e configure QR, WhatsApp e cupom para medir conversões por tela.</p>
         </div>
-        <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
+        <div className="screen-actions">
+          <Link className="btn primary" href="/painel/criar-conteudo">Criar com template</Link>
+          <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
+        </div>
       </div>
 
       <div className="two-column">
@@ -288,7 +291,7 @@ export default function CampaignsClient() {
                     <div className="eyebrow">{campaign.trackingEnabled ? "RASTREÁVEL" : "ATIVA"}</div>
                     <h3>{campaign.name}</h3>
                     <p className="muted">
-                      {campaign.advertiserName} • {campaign.durationSeconds}s • {formatBytes(campaign.sizeBytes)}
+                      {campaign.advertiserName} • {campaign.mediaType === "image" ? "Imagem" : "Vídeo"} • {campaign.durationSeconds}s • {formatBytes(campaign.sizeBytes)}
                     </p>
                     {campaign.offerText ? <span className="file-summary">{campaign.offerText}</span> : null}
                     {campaign.couponCode ? <span className="file-summary">Cupom: {campaign.couponCode}</span> : null}

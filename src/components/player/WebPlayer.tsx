@@ -218,7 +218,6 @@ export default function WebPlayer({
       }
 
       setIndex((value) => (value + 1) % activeManifest.items.length);
-      // Garante remount mesmo com uma única mídia ou na volta da última para a primeira.
       setPlaybackCycle((value) => value + 1);
 
       window.setTimeout(() => {
@@ -243,12 +242,18 @@ export default function WebPlayer({
 
     watchdogRef.current = window.setTimeout(
       () => advancePlayback("watchdog"),
-      Math.ceil(fallbackSeconds * 1000) + WATCHDOG_GRACE_MS
+      Math.ceil(fallbackSeconds * 1000) +
+        (item?.mediaType === "image" ? 0 : WATCHDOG_GRACE_MS)
     );
   }, [advancePlayback, clearWatchdog, index]);
 
   useEffect(() => {
     if (!current) return;
+
+    if (current.mediaType === "image") {
+      armWatchdog();
+      return () => clearWatchdog();
+    }
 
     const video = videoRef.current;
     if (!video) return;
@@ -263,7 +268,6 @@ export default function WebPlayer({
         if (!cancelled) armWatchdog();
       } catch {
         // Alguns browsers de TV demoram para liberar autoplay.
-        // loadeddata/canplay tentarão novamente.
       }
     };
 
@@ -308,26 +312,40 @@ export default function WebPlayer({
 
   const conversionUrl =
     origin && current.conversionPath ? `${origin}${current.conversionPath}` : "";
+  const mediaUrl = urls[current.campaignId] || current.mediaUrl;
+  const mediaKey = `${manifest.version}:${current.campaignId}:${playbackCycle}`;
 
   return (
     <main className="player-root">
-      <video
-        ref={videoRef}
-        key={`${manifest.version}:${current.campaignId}:${playbackCycle}`}
-        className="player-video"
-        src={urls[current.campaignId] || current.mediaUrl}
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        onLoadedData={handleCanPlay}
-        onCanPlay={handleCanPlay}
-        onPlaying={armWatchdog}
-        onEnded={() => advancePlayback("ended")}
-        onError={() => {
-          window.setTimeout(() => advancePlayback("error"), 800);
-        }}
-      />
+      {current.mediaType === "image" ? (
+        <img
+          key={mediaKey}
+          className="player-media player-image player-fade"
+          src={mediaUrl}
+          alt=""
+          onLoad={armWatchdog}
+          onError={() => window.setTimeout(() => advancePlayback("error"), 800)}
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          key={mediaKey}
+          className="player-media player-video player-fade"
+          src={mediaUrl}
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          onLoadedData={handleCanPlay}
+          onCanPlay={handleCanPlay}
+          onPlaying={armWatchdog}
+          onEnded={() => advancePlayback("ended")}
+          onError={() => {
+            window.setTimeout(() => advancePlayback("error"), 800);
+          }}
+        />
+      )}
+
       {conversionUrl ? (
         <div className="conversion-overlay">
           <div className="conversion-copy">
@@ -339,10 +357,17 @@ export default function WebPlayer({
             </span>
           </div>
           <div className="conversion-qr">
-            <QRCodeSVG value={conversionUrl} size={138} level="M" bgColor="#ffffff" fgColor="#000000" />
+            <QRCodeSVG
+              value={conversionUrl}
+              size={138}
+              level="M"
+              bgColor="#ffffff"
+              fgColor="#000000"
+            />
           </div>
         </div>
       ) : null}
+
       <div className="player-badge">
         <span className={online ? "status-dot online" : "status-dot"} />
         {status === "offline" ? "offline • cache local" : "online"}

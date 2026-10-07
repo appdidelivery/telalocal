@@ -12,7 +12,9 @@ export type PlayerManifestItem = {
   advertiserName: string;
   mediaUrl: string;
   mediaPath: string;
+  mediaType?: "video" | "image";
   durationSeconds: number;
+  transition?: "fade";
   conversionPath?: string;
   whatsappNumber?: string;
   couponCode?: string;
