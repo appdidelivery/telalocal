@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   updateProfile,
 } from "firebase/auth";
@@ -77,4 +78,18 @@ export function loginAccount(email: string, password: string) {
 
 export function logoutAccount() {
   return signOut(auth);
+}
+
+
+export async function requestPasswordReset(email: string) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) {
+    throw Object.assign(new Error("Informe seu e-mail para recuperar a senha."), {
+      code: "auth/missing-email",
+    });
+  }
+
+  await sendPasswordResetEmail(auth, normalized, {
+    url: `${window.location.origin}/login`,
+  });
 }

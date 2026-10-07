@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginAccount } from "@/lib/firebase/accounts";
+import { loginAccount, requestPasswordReset } from "@/lib/firebase/accounts";
 import { firebaseErrorMessage } from "@/lib/firebase/errors";
 
 export default function LoginForm() {
@@ -11,11 +11,14 @@ export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setMessage("");
     setLoading(true);
     try {
       await loginAccount(email, password);
@@ -23,6 +26,29 @@ export default function LoginForm() {
     } catch (err) {
       setError(firebaseErrorMessage(err));
       setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    setError("");
+    setMessage("");
+
+    if (!email.trim()) {
+      setError("Digite seu e-mail acima para recuperar a senha.");
+      return;
+    }
+
+    setResetting(true);
+
+    try {
+      await requestPasswordReset(email);
+      setMessage(
+        "Enviamos um link de redefinição para seu e-mail. Verifique também spam e promoções."
+      );
+    } catch (err) {
+      setError(firebaseErrorMessage(err));
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -38,11 +64,22 @@ export default function LoginForm() {
       </div>
 
       <div className="field">
-        <label htmlFor="password">Senha</label>
+        <div className="field-label-row">
+          <label htmlFor="password">Senha</label>
+          <button
+            className="link-button"
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={resetting}
+          >
+            {resetting ? "Enviando..." : "Esqueci minha senha"}
+          </button>
+        </div>
         <input id="password" required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" />
       </div>
 
       {error ? <p className="message error">{error}</p> : null}
+      {message ? <p className="message success">{message}</p> : null}
 
       <button className="btn primary full" type="submit" disabled={loading}>
         {loading ? "Entrando..." : "Entrar"}
