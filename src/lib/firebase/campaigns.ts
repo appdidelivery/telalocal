@@ -7,6 +7,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "./client";
@@ -126,4 +127,32 @@ export async function createCampaign(
     ...record,
     createdAt: undefined,
   };
+}
+
+
+export async function updateCampaignTracking(
+  campaignId: string,
+  input: {
+    whatsappNumber?: string;
+    couponCode?: string;
+    offerText?: string;
+  }
+) {
+  const context = await getTenantContext();
+  const whatsappNumber = digitsOnly(input.whatsappNumber);
+  const couponCode = String(input.couponCode ?? "").trim().toUpperCase();
+  const offerText = String(input.offerText ?? "").trim();
+
+  await updateDoc(
+    doc(db, "tenants", context.tenantId, "campaigns", campaignId),
+    {
+      whatsappNumber,
+      couponCode,
+      offerText,
+      trackingEnabled: Boolean(whatsappNumber || couponCode || offerText),
+      updatedAt: serverTimestamp(),
+    }
+  );
+
+  return { whatsappNumber, couponCode, offerText };
 }
