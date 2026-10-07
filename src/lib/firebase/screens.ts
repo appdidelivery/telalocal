@@ -211,8 +211,12 @@ export async function listScreens(context: TenantContext): Promise<ScreenRecord[
 export async function listHeartbeats(
   context: TenantContext
 ): Promise<Record<string, HeartbeatRecord>> {
+  const cutoff = Date.now() - 25 * 60 * 1000;
   const snapshot = await getDocs(
-    collection(db, "tenants", context.tenantId, "heartbeats")
+    query(
+      collection(db, "tenants", context.tenantId, "heartbeats"),
+      where("lastSeenAtMs", ">=", cutoff)
+    )
   );
 
   const output: Record<string, HeartbeatRecord> = {};
@@ -228,7 +232,7 @@ export function isHeartbeatOnline(
 ) {
   return Boolean(
     heartbeat?.lastSeenAtMs &&
-      now - Number(heartbeat.lastSeenAtMs) <= 7 * 60 * 1000
+      now - Number(heartbeat.lastSeenAtMs) <= 25 * 60 * 1000
   );
 }
 
