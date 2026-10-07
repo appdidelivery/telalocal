@@ -23,6 +23,7 @@ export type ScreenRecord = {
   status: "active" | "paused";
   playerPath: string;
   playerKey?: string;
+  shortCode?: string;
   createdAt?: { seconds?: number };
 };
 
@@ -35,7 +36,7 @@ export type CreateScreenInput = {
   state: string;
 };
 
-type TenantContext = {
+export type TenantContext = {
   tenantId: string;
   ownerUid: string;
 };
@@ -48,8 +49,13 @@ function createPlayerKey() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function playerPath(screenId: string, playerKey: string) {
-  return `/player/${screenId}?k=${encodeURIComponent(playerKey)}`;
+function shortCodeForScreen(screenId: string) {
+  const clean = screenId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return (clean.slice(0, 6) || "TELA01").padEnd(6, "X");
+}
+
+function shortPlayerPath(shortCode: string) {
+  return `/t/${shortCode}`;
 }
 
 export async function getTenantContext(): Promise<TenantContext> {
@@ -91,23 +97,45 @@ export async function listScreens(context: TenantContext): Promise<ScreenRecord[
   const screens = snapshot.docs.map((item) => {
     const data = item.data();
     const existingKey = String(data.playerKey ?? "");
-    const key = existingKey || createPlayerKey();
-    const securePath = playerPath(item.id, key);
+    const playerKey = existingKey || createPlayerKey();
+    const existingShortCode = String(data.shortCode ?? "");
+    const shortCode = existingShortCode || shortCodeForScreen(item.id);
+    const playerPath = shortPlayerPath(shortCode);
 
-    if (!existingKey || data.playerPath !== securePath) {
+    if (
+      !existingKey ||
+      !existingShortCode ||
+      data.playerPath !== playerPath
+    ) {
       batch.update(item.ref, {
-        playerKey: key,
-        playerPath: securePath,
+        playerKey,
+        shortCode,
+        playerPath,
         updatedAt: serverTimestamp(),
       });
+
+      batch.set(
+        doc(db, "screenAliases", shortCode),
+        {
+          tenantId: context.tenantId,
+          ownerUid: context.ownerUid,
+          screenId: item.id,
+          playerKey,
+          status: "active",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
       migrations += 1;
     }
 
     return {
       id: item.id,
       ...data,
-      playerKey: key,
-      playerPath: securePath,
+      playerKey,
+      shortCode,
+      playerPath,
     } as ScreenRecord;
   });
 
@@ -127,8 +155,10 @@ export async function createPointAndScreen(
   const pointRef = doc(collection(db, "tenants", context.tenantId, "points"));
   const screenRef = doc(collection(db, "tenants", context.tenantId, "screens"));
   const batch = writeBatch(db);
+
   const playerKey = createPlayerKey();
-  const securePlayerPath = playerPath(screenRef.id, playerKey);
+  const shortCode = shortCodeForScreen(screenRef.id);
+  const playerPath = shortPlayerPath(shortCode);
 
   const shared = {
     tenantId: context.tenantId,
@@ -156,9 +186,20 @@ export async function createPointAndScreen(
     city: input.city.trim(),
     state: input.state.trim().toUpperCase(),
     playerKey,
-    playerPath: securePlayerPath,
+    shortCode,
+    playerPath,
     manifestVersion: 0,
     playlistStatus: "empty",
+  });
+
+  batch.set(doc(db, "screenAliases", shortCode), {
+    tenantId: context.tenantId,
+    ownerUid: context.ownerUid,
+    screenId: screenRef.id,
+    playerKey,
+    status: "active",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 
   await batch.commit();
@@ -173,6 +214,7 @@ export async function createPointAndScreen(
     state: input.state.trim().toUpperCase(),
     status: "active",
     playerKey,
-    playerPath: securePlayerPath,
+    shortCode,
+    playerPath,
   };
 }

@@ -25,6 +25,10 @@ export type CampaignRecord = {
   fileName: string;
   sizeBytes: number;
   durationSeconds: number;
+  whatsappNumber?: string;
+  couponCode?: string;
+  offerText?: string;
+  trackingEnabled?: boolean;
   status: "active";
   ownerUid: string;
   tenantId: string;
@@ -36,7 +40,14 @@ export type CreateCampaignInput = {
   advertiserName: string;
   file: File;
   durationSeconds: number;
+  whatsappNumber?: string;
+  couponCode?: string;
+  offerText?: string;
 };
+
+function digitsOnly(value?: string) {
+  return String(value ?? "").replace(/\D/g, "");
+}
 
 export async function listCampaigns(): Promise<CampaignRecord[]> {
   const context = await getTenantContext();
@@ -83,6 +94,10 @@ export async function createCampaign(
       ? upload.duration
       : input.durationSeconds;
 
+  const whatsappNumber = digitsOnly(input.whatsappNumber);
+  const couponCode = String(input.couponCode ?? "").trim().toUpperCase();
+  const offerText = String(input.offerText ?? "").trim();
+
   const record = {
     tenantId: context.tenantId,
     ownerUid: context.ownerUid,
@@ -95,6 +110,10 @@ export async function createCampaign(
     mimeType: "video/mp4",
     sizeBytes: upload.bytes || input.file.size,
     durationSeconds: Math.round(durationSeconds * 10) / 10,
+    whatsappNumber,
+    couponCode,
+    offerText,
+    trackingEnabled: Boolean(whatsappNumber || couponCode || offerText),
     status: "active" as const,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

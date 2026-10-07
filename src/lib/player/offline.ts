@@ -13,6 +13,10 @@ export type PlayerManifestItem = {
   mediaUrl: string;
   mediaPath: string;
   durationSeconds: number;
+  conversionPath?: string;
+  whatsappNumber?: string;
+  couponCode?: string;
+  offerText?: string;
 };
 
 export type PlayerManifest = {

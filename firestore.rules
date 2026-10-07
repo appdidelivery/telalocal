@@ -28,6 +28,12 @@ service cloud.firestore {
       );
     }
 
+    function conversionLink(token) {
+      return get(
+        /databases/$(database)/documents/conversionLinks/$(token)
+      );
+    }
+
     function validProofBatch(tenantId, batchId) {
       return request.resource.data.keys().hasOnly([
           "tenantId",
@@ -51,6 +57,30 @@ service cloud.firestore {
           == request.resource.data.playerKey
         && screenDoc(tenantId, request.resource.data.screenId).data.status
           == "active";
+    }
+
+    function validConversionEvent(tenantId) {
+      let link = conversionLink(request.resource.data.token);
+
+      return request.resource.data.keys().hasOnly([
+          "tenantId",
+          "token",
+          "screenId",
+          "campaignId",
+          "eventType",
+          "date",
+          "eventAt"
+        ])
+        && request.resource.data.tenantId == tenantId
+        && request.resource.data.eventType in [
+          "qr_scan",
+          "whatsapp_click",
+          "coupon_copy"
+        ]
+        && link.data.status == "active"
+        && link.data.tenantId == tenantId
+        && link.data.screenId == request.resource.data.screenId
+        && link.data.campaignId == request.resource.data.campaignId;
     }
 
     match /users/{uid} {
@@ -109,6 +139,12 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /conversionEvents/{eventId} {
+        allow create: if validConversionEvent(tenantId);
+        allow read: if belongsToTenant(tenantId);
+        allow update, delete: if false;
+      }
+
       match /{document=**} {
         allow read: if belongsToTenant(tenantId);
 
@@ -124,6 +160,40 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+    }
+
+    match /screenAliases/{shortCode} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && belongsToTenant(request.resource.data.tenantId);
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.tenantId == resource.data.tenantId
+        && belongsToTenant(resource.data.tenantId);
+
+      allow delete: if false;
+    }
+
+    match /conversionLinks/{token} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.token == token
+        && belongsToTenant(request.resource.data.tenantId);
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.tenantId == resource.data.tenantId
+        && request.resource.data.token == resource.data.token
+        && belongsToTenant(resource.data.tenantId);
+
+      allow delete: if false;
     }
 
     match /playerManifests/{screenId} {

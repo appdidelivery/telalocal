@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   cacheManifestMedia,
   getPlayableUrl,
@@ -29,6 +30,7 @@ export default function WebPlayer({
   const [playbackCycle, setPlaybackCycle] = useState(0);
   const [status, setStatus] = useState<PlayerStatus>("starting");
   const [online, setOnline] = useState(true);
+  const [origin, setOrigin] = useState("");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
@@ -116,6 +118,7 @@ export default function WebPlayer({
   useEffect(() => {
     let active = true;
     setOnline(navigator.onLine);
+    setOrigin(window.location.origin);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
@@ -303,6 +306,9 @@ export default function WebPlayer({
     );
   }
 
+  const conversionUrl =
+    origin && current.conversionPath ? `${origin}${current.conversionPath}` : "";
+
   return (
     <main className="player-root">
       <video
@@ -322,6 +328,21 @@ export default function WebPlayer({
           window.setTimeout(() => advancePlayback("error"), 800);
         }}
       />
+      {conversionUrl ? (
+        <div className="conversion-overlay">
+          <div className="conversion-copy">
+            <strong>{current.offerText || "Escaneie e aproveite"}</strong>
+            <span>
+              {current.couponCode
+                ? `Cupom ${current.couponCode} • WhatsApp`
+                : "Abra no celular • WhatsApp"}
+            </span>
+          </div>
+          <div className="conversion-qr">
+            <QRCodeSVG value={conversionUrl} size={138} level="M" bgColor="#ffffff" fgColor="#000000" />
+          </div>
+        </div>
+      ) : null}
       <div className="player-badge">
         <span className={online ? "status-dot online" : "status-dot"} />
         {status === "offline" ? "offline • cache local" : "online"}

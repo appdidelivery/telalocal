@@ -40,6 +40,9 @@ export default function CampaignsClient() {
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [name, setName] = useState("");
   const [advertiserName, setAdvertiserName] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [offerText, setOfferText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -114,12 +117,23 @@ export default function CampaignsClient() {
 
     try {
       const created = await createCampaign(
-        { name, advertiserName, file, durationSeconds: duration },
+        {
+          name,
+          advertiserName,
+          file,
+          durationSeconds: duration,
+          whatsappNumber,
+          couponCode,
+          offerText,
+        },
         setProgress
       );
       setCampaigns((current) => [created, ...current]);
       setName("");
       setAdvertiserName("");
+      setWhatsappNumber("");
+      setCouponCode("");
+      setOfferText("");
       setFile(null);
       setDuration(0);
       setProgress(0);
@@ -141,9 +155,9 @@ export default function CampaignsClient() {
     <main className="panel-page wrap">
       <div className="panel-page-header">
         <div>
-          <div className="eyebrow">MÍDIA E ANUNCIANTES</div>
+          <div className="eyebrow">MÍDIA, OFERTA E CONVERSÃO</div>
           <h1>Campanhas</h1>
-          <p className="muted">Cadastre o anunciante e envie o MP4 que depois poderá entrar nas playlists das telas.</p>
+          <p className="muted">Envie o MP4 e configure QR, WhatsApp e cupom para medir conversões por tela.</p>
         </div>
         <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
       </div>
@@ -151,16 +165,32 @@ export default function CampaignsClient() {
       <div className="two-column">
         <form className="card screen-form" onSubmit={handleSubmit}>
           <h2>Nova campanha</h2>
-          <p className="muted">MP4 de até 60 MB. Para o piloto, prefira peças de 10 a 30 segundos em 1080p.</p>
+          <p className="muted">MP4 até 60 MB. O QR rastreável é gerado automaticamente quando a campanha entra na playlist.</p>
 
           <div className="field">
             <label htmlFor="campaign-name">Nome da campanha</label>
-            <input id="campaign-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Oferta Outubro" />
+            <input id="campaign-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Primeiro pedido 50% OFF" />
           </div>
 
           <div className="field">
             <label htmlFor="advertiser-name">Anunciante</label>
-            <input id="advertiser-name" required value={advertiserName} onChange={(e) => setAdvertiserName(e.target.value)} placeholder="Ex.: Loja Exemplo" />
+            <input id="advertiser-name" required value={advertiserName} onChange={(e) => setAdvertiserName(e.target.value)} placeholder="Ex.: Burger Prime" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="offer-text">Chamada da oferta</label>
+            <input id="offer-text" value={offerText} onChange={(e) => setOfferText(e.target.value)} placeholder="Ex.: Primeiro pedido com 50% OFF" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="whatsapp-number">WhatsApp para conversão</label>
+            <input id="whatsapp-number" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="Ex.: 5548999999999" inputMode="tel" />
+            <span className="file-summary">Use DDI + DDD + número. O QR abrirá uma landing rastreável antes do WhatsApp.</span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="coupon-code">Cupom</label>
+            <input id="coupon-code" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} placeholder="Ex.: TELA50" />
           </div>
 
           <div className="field">
@@ -208,12 +238,13 @@ export default function CampaignsClient() {
               {campaigns.map((campaign) => (
                 <article className="screen-row" key={campaign.id}>
                   <div className="campaign-main">
-                    <div className="eyebrow">ATIVA</div>
+                    <div className="eyebrow">{campaign.trackingEnabled ? "RASTREÁVEL" : "ATIVA"}</div>
                     <h3>{campaign.name}</h3>
                     <p className="muted">
                       {campaign.advertiserName} • {campaign.durationSeconds}s • {formatBytes(campaign.sizeBytes)}
                     </p>
-                    <span className="file-summary">{campaign.fileName}</span>
+                    {campaign.offerText ? <span className="file-summary">{campaign.offerText}</span> : null}
+                    {campaign.couponCode ? <span className="file-summary">Cupom: {campaign.couponCode}</span> : null}
                   </div>
                   <div className="screen-actions">
                     <a className="btn ghost" href={campaign.mediaUrl} target="_blank" rel="noreferrer">Ver vídeo</a>

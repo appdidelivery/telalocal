@@ -20,6 +20,10 @@ export type PlayerManifestItem = {
   mediaUrl: string;
   mediaPath: string;
   durationSeconds: number;
+  conversionPath?: string;
+  whatsappNumber?: string;
+  couponCode?: string;
+  offerText?: string;
 };
 
 export type PlayerManifest = {
@@ -30,6 +34,18 @@ export type PlayerManifest = {
   generatedAt: string;
   items: PlayerManifestItem[];
 };
+
+function conversionToken(screen: ScreenRecord, campaign: CampaignRecord) {
+  const screenPart = String(screen.shortCode || screen.id.slice(0, 6))
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+  const campaignPart = campaign.id
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 6)
+    .toLowerCase();
+
+  return `${screenPart}${campaignPart}`;
+}
 
 export async function loadPlaylistEditorData(): Promise<{
   screens: ScreenRecord[];
@@ -67,20 +83,30 @@ export async function publishPlaylist(
   const context = await getTenantContext();
   const version = Date.now();
 
-  const manifest: PlayerManifest = {
-    schemaVersion: 1,
-    version,
-    tenantId: context.tenantId,
-    screenId: screen.id,
-    generatedAt: new Date().toISOString(),
-    items: campaigns.map((campaign) => ({
+  const manifestItems = campaigns.map((campaign) => {
+    const token = conversionToken(screen, campaign);
+
+    return {
       campaignId: campaign.id,
       name: campaign.name,
       advertiserName: campaign.advertiserName,
       mediaUrl: campaign.mediaUrl,
       mediaPath: campaign.mediaPath,
       durationSeconds: campaign.durationSeconds,
-    })),
+      conversionPath: `/r/${token}`,
+      whatsappNumber: campaign.whatsappNumber || "",
+      couponCode: campaign.couponCode || "",
+      offerText: campaign.offerText || "",
+    };
+  });
+
+  const manifest: PlayerManifest = {
+    schemaVersion: 1,
+    version,
+    tenantId: context.tenantId,
+    screenId: screen.id,
+    generatedAt: new Date().toISOString(),
+    items: manifestItems,
   };
 
   const playlistRef = doc(
@@ -128,6 +154,31 @@ export async function publishPlaylist(
     ownerUid: context.ownerUid,
     status: "published",
     updatedAt: serverTimestamp(),
+  });
+
+  campaigns.forEach((campaign) => {
+    const token = conversionToken(screen, campaign);
+
+    batch.set(
+      doc(db, "conversionLinks", token),
+      {
+        token,
+        tenantId: context.tenantId,
+        ownerUid: context.ownerUid,
+        screenId: screen.id,
+        screenName: screen.screenName,
+        pointName: screen.pointName,
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        advertiserName: campaign.advertiserName,
+        whatsappNumber: campaign.whatsappNumber || "",
+        couponCode: campaign.couponCode || "",
+        offerText: campaign.offerText || "",
+        status: "active",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   });
 
   await batch.commit();
