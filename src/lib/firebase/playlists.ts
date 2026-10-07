@@ -9,8 +9,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { ref, uploadBytes } from "firebase/storage";
-import { db, storage } from "./client";
+import { db } from "./client";
 import { getTenantContext, listScreens, type ScreenRecord } from "./screens";
 import type { CampaignRecord } from "./campaigns";
 
@@ -59,7 +58,9 @@ export async function publishPlaylist(
   campaigns: CampaignRecord[]
 ) {
   if (campaigns.length === 0) {
-    throw new Error("playlist/empty");
+    throw Object.assign(new Error("A playlist precisa ter pelo menos uma campanha."), {
+      code: "playlist/empty",
+    });
   }
 
   const context = await getTenantContext();
@@ -80,23 +81,22 @@ export async function publishPlaylist(
     })),
   };
 
-  const manifestPath = `manifests/${screen.id}/current.json`;
-  const manifestRef = ref(storage, manifestPath);
-  const bytes = new TextEncoder().encode(JSON.stringify(manifest));
+  const playlistRef = doc(
+    db,
+    "tenants",
+    context.tenantId,
+    "playlists",
+    screen.id
+  );
+  const screenRef = doc(
+    db,
+    "tenants",
+    context.tenantId,
+    "screens",
+    screen.id
+  );
+  const publicManifestRef = doc(db, "playerManifests", screen.id);
 
-  await uploadBytes(manifestRef, bytes, {
-    contentType: "application/json",
-    cacheControl: "no-store,max-age=0",
-    customMetadata: {
-      ownerUid: context.ownerUid,
-      tenantId: context.tenantId,
-      screenId: screen.id,
-      version: String(version),
-    },
-  });
-
-  const playlistRef = doc(db, "tenants", context.tenantId, "playlists", screen.id);
-  const screenRef = doc(db, "tenants", context.tenantId, "screens", screen.id);
   const batch = writeBatch(db);
 
   batch.set(
@@ -106,7 +106,7 @@ export async function publishPlaylist(
       ownerUid: context.ownerUid,
       screenId: screen.id,
       campaignIds: campaigns.map((campaign) => campaign.id),
-      manifestPath,
+      manifestSource: "firestore",
       manifestVersion: version,
       status: "published",
       updatedAt: serverTimestamp(),
@@ -118,6 +118,14 @@ export async function publishPlaylist(
   batch.update(screenRef, {
     manifestVersion: version,
     playlistStatus: "published",
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.set(publicManifestRef, {
+    ...manifest,
+    tenantId: context.tenantId,
+    ownerUid: context.ownerUid,
+    status: "published",
     updatedAt: serverTimestamp(),
   });
 

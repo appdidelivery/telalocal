@@ -98,9 +98,9 @@ export default function PlaylistsClient() {
           ? String((err as { code?: string }).code)
           : "";
       setError(
-        code === "storage/unauthorized"
-          ? "O Storage bloqueou a publicação. Publique as regras atualizadas do Storage."
-          : "Não foi possível publicar a playlist."
+        code === "permission-denied" || code === "firestore/permission-denied"
+          ? "O Firestore bloqueou a publicação. Aguarde o deploy automático das regras e tente novamente."
+          : "Não foi possível publicar a playlist. Tente novamente."
       );
     } finally {
       setPublishing(false);

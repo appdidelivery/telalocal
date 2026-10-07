@@ -86,6 +86,28 @@ service cloud.firestore {
       }
     }
 
+    match /playerManifests/{screenId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.screenId == screenId
+        && request.resource.data.status == "published"
+        && request.resource.data.schemaVersion == 1
+        && belongsToTenant(request.resource.data.tenantId);
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.tenantId == resource.data.tenantId
+        && request.resource.data.screenId == resource.data.screenId
+        && request.resource.data.status == "published"
+        && request.resource.data.schemaVersion == 1
+        && belongsToTenant(resource.data.tenantId);
+
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

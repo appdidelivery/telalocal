@@ -1,3 +1,6 @@
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
+
 export type PlayerManifestItem = {
   campaignId: string;
   name: string;
@@ -20,6 +23,7 @@ const DB_VERSION = 1;
 const MANIFEST_STORE = "manifests";
 const LOG_STORE = "proof-of-play";
 const MEDIA_CACHE = "telalocal-media-v1";
+const MANIFEST_CHECK_PREFIX = "telalocal:manifest-check:";
 
 function openDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -38,6 +42,32 @@ function openDb() {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+function currentDayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function wasManifestCheckedToday(screenId: string) {
+  try {
+    return (
+      window.localStorage.getItem(`${MANIFEST_CHECK_PREFIX}${screenId}`) ===
+      currentDayKey()
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function markManifestCheckedToday(screenId: string) {
+  try {
+    window.localStorage.setItem(
+      `${MANIFEST_CHECK_PREFIX}${screenId}`,
+      currentDayKey()
+    );
+  } catch {
+    // TVs com storage restrito continuam funcionando sem essa otimização.
+  }
 }
 
 export async function saveManifest(manifest: PlayerManifest) {
@@ -71,7 +101,9 @@ export async function queueProofOfPlay(input: {
   const db = await openDb();
   const now = Date.now();
   const record = {
-    id: `${input.screenId}:${input.campaignId}:${now}:${Math.random().toString(36).slice(2)}`,
+    id: `${input.screenId}:${input.campaignId}:${now}:${Math.random()
+      .toString(36)
+      .slice(2)}`,
     ...input,
     playedAt: new Date(now).toISOString(),
     synced: false,
@@ -117,27 +149,20 @@ export async function getPlayableUrl(mediaUrl: string) {
   return URL.createObjectURL(blob);
 }
 
-export function manifestUrl(screenId: string) {
-  const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucket) throw new Error("storage/bucket-missing");
-
-  const objectPath = encodeURIComponent(`manifests/${screenId}/current.json`);
-  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${objectPath}?alt=media`;
-}
-
 export async function fetchLatestManifest(screenId: string) {
-  const response = await fetch(manifestUrl(screenId), {
-    cache: "no-store",
-    headers: { "Cache-Control": "no-cache" },
-  });
+  const snapshot = await getDoc(doc(db, "playerManifests", screenId));
 
-  if (response.status === 404) {
+  if (!snapshot.exists()) {
     throw new Error("manifest/not-found");
   }
 
-  if (!response.ok) {
-    throw new Error(`manifest/http-${response.status}`);
-  }
+  const data = snapshot.data();
 
-  return (await response.json()) as PlayerManifest;
+  return {
+    schemaVersion: 1,
+    version: Number(data.version),
+    screenId: String(data.screenId),
+    generatedAt: String(data.generatedAt),
+    items: Array.isArray(data.items) ? data.items : [],
+  } as PlayerManifest;
 }

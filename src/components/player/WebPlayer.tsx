@@ -5,9 +5,11 @@ import {
   cacheManifestMedia,
   fetchLatestManifest,
   getPlayableUrl,
+  markManifestCheckedToday,
   queueProofOfPlay,
   readManifest,
   saveManifest,
+  wasManifestCheckedToday,
   type PlayerManifest,
 } from "@/lib/player/offline";
 
@@ -20,12 +22,13 @@ export default function WebPlayer({ screenId }: { screenId: string }) {
   const [status, setStatus] = useState<PlayerStatus>("starting");
   const [online, setOnline] = useState(true);
   const objectUrlsRef = useRef<string[]>([]);
+  const currentVersionRef = useRef<number | null>(null);
 
   const preparePlayback = useCallback(async (nextManifest: PlayerManifest) => {
     try {
       await cacheManifestMedia(nextManifest);
     } catch {
-      // Se algum cache falhar, o player ainda tenta reproduzir pela URL de rede.
+      // Se algum cache falhar, o player ainda tenta reproduzir pela CDN.
     }
 
     const pairs = await Promise.all(
@@ -44,63 +47,86 @@ export default function WebPlayer({ screenId }: { screenId: string }) {
       if (url.startsWith("blob:")) objectUrlsRef.current.push(url);
     }
 
+    currentVersionRef.current = nextManifest.version;
     setUrls(nextUrls);
     setManifest(nextManifest);
     setIndex(0);
     setStatus(navigator.onLine ? "ready" : "offline");
   }, []);
 
-  const sync = useCallback(async () => {
-    try {
-      const latest = await fetchLatestManifest(screenId);
-      if (!manifest || latest.version !== manifest.version) {
-        await saveManifest(latest);
-        await preparePlayback(latest);
-      } else {
-        setStatus(navigator.onLine ? "ready" : "offline");
+  const syncFromNetwork = useCallback(
+    async (force = false) => {
+      if (!navigator.onLine) return;
+
+      if (!force && wasManifestCheckedToday(screenId)) {
+        return;
       }
-    } catch {
-      const cached = await readManifest(screenId);
-      if (cached) {
-        if (!manifest || cached.version !== manifest.version) {
-          await preparePlayback(cached);
+
+      try {
+        const latest = await fetchLatestManifest(screenId);
+        markManifestCheckedToday(screenId);
+
+        if (latest.version !== currentVersionRef.current) {
+          await saveManifest(latest);
+          await preparePlayback(latest);
+        } else {
+          setStatus("ready");
         }
-        setStatus("offline");
-      } else {
-        setStatus("waiting");
+      } catch {
+        // Mantém o último manifesto local caso a rede ou o Firestore falhem.
       }
-    }
-  }, [manifest, preparePlayback, screenId]);
+    },
+    [preparePlayback, screenId]
+  );
 
   useEffect(() => {
+    let active = true;
     setOnline(navigator.onLine);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }
 
-    sync();
+    (async () => {
+      const cached = await readManifest(screenId).catch(() => undefined);
 
-    const interval = window.setInterval(sync, 15 * 60 * 1000);
+      if (!active) return;
+
+      if (cached) {
+        await preparePlayback(cached);
+      } else {
+        setStatus(navigator.onLine ? "starting" : "waiting");
+      }
+
+      if (navigator.onLine && (!cached || !wasManifestCheckedToday(screenId))) {
+        await syncFromNetwork(!cached);
+      }
+
+      if (!cached && currentVersionRef.current === null) {
+        setStatus(navigator.onLine ? "waiting" : "offline");
+      }
+    })();
+
     const handleOnline = () => {
       setOnline(true);
-      sync();
+      syncFromNetwork(false);
     };
+
     const handleOffline = () => {
       setOnline(false);
-      setStatus("offline");
+      setStatus(currentVersionRef.current ? "offline" : "waiting");
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
     return () => {
-      window.clearInterval(interval);
+      active = false;
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
     };
-  }, [sync]);
+  }, [preparePlayback, screenId, syncFromNetwork]);
 
   const current = useMemo(() => {
     if (!manifest?.items.length) return null;
@@ -131,10 +157,14 @@ export default function WebPlayer({ screenId }: { screenId: string }) {
         <div className="tv-ad">
           <div>
             <div className="eyebrow">TELALOCAL • WEB PLAYER</div>
-            <h1>{status === "waiting" ? "Aguardando playlist." : "Preparando player..."}</h1>
+            <h1>
+              {status === "waiting"
+                ? "Aguardando playlist."
+                : "Preparando player..."}
+            </h1>
             <p>
               {online
-                ? "Quando uma playlist for publicada, ela aparecerá automaticamente."
+                ? "Quando uma playlist for publicada, ela será carregada nesta tela."
                 : "Sem conexão e ainda não há uma playlist salva neste aparelho."}
             </p>
             <small className="player-id">Tela: {screenId}</small>
