@@ -310,6 +310,27 @@ export default function ScreensClient() {
                           Campanha: <strong>{heartbeat?.currentCampaignName || heartbeat?.currentCampaignId?.slice(0, 8) || "—"}</strong>
                         </span>
                       </div>
+
+                      {heartbeat ? (
+                        <div className="screen-diagnostics">
+                          <span className={heartbeat.compatMode ? "diag-pill warn" : "diag-pill ok"}>
+                            {heartbeat.compatMode ? "Compatibilidade: atenção" : "Compatibilidade: OK"}
+                          </span>
+                          <span className="diag-pill">
+                            {heartbeat.browserFamily || "Navegador"}
+                            {heartbeat.browserVersion ? ` ${heartbeat.browserVersion}` : ""}
+                          </span>
+                          <span className={heartbeat.h264Support === "no" ? "diag-pill warn" : "diag-pill"}>
+                            H.264: {heartbeat.h264Support || "—"}
+                          </span>
+                          <span className={heartbeat.supportsIndexedDb ? "diag-pill" : "diag-pill warn"}>
+                            IndexedDB: {heartbeat.supportsIndexedDb ? "sim" : "não"}
+                          </span>
+                          <span className={heartbeat.supportsCacheStorage ? "diag-pill" : "diag-pill warn"}>
+                            Cache: {heartbeat.supportsCacheStorage ? "sim" : "não"}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="screen-actions screen-actions-stack">
