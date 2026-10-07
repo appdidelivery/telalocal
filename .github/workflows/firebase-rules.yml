@@ -6,9 +6,7 @@ on:
       - main
     paths:
       - "firestore.rules"
-      - "firestore.indexes.json"
-      - "firebase.json"
-      - ".firebaserc"
+      - ".github/scripts/deploy-firestore-rules.mjs"
       - ".github/workflows/firebase-rules.yml"
   workflow_dispatch:
 
@@ -32,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Validate Firebase credential secret
         shell: bash
@@ -53,9 +51,10 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$CREDENTIALS_FILE"
           chmod 600 "$CREDENTIALS_FILE"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE" >> "$GITHUB_ENV"
+          echo "FIREBASE_PROJECT_ID=telalocal" >> "$GITHUB_ENV"
 
-      - name: Install Firebase CLI
-        run: npm install --global firebase-tools
+      - name: Install Firebase Admin SDK
+        run: npm install --no-save firebase-admin
 
-      - name: Deploy Firestore rules and indexes
-        run: firebase deploy --only firestore:rules,firestore:indexes --project telalocal --non-interactive
+      - name: Deploy Firestore rules
+        run: node .github/scripts/deploy-firestore-rules.mjs
