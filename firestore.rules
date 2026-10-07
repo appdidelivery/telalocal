@@ -22,6 +22,37 @@ service cloud.firestore {
       return value == "host" || value == "advertiser";
     }
 
+    function screenDoc(tenantId, screenId) {
+      return get(
+        /databases/$(database)/documents/tenants/$(tenantId)/screens/$(screenId)
+      );
+    }
+
+    function validProofBatch(tenantId, batchId) {
+      return request.resource.data.keys().hasOnly([
+          "tenantId",
+          "screenId",
+          "playerKey",
+          "batchId",
+          "date",
+          "totalPlays",
+          "campaignCounts",
+          "manifestVersion",
+          "firstPlayedAt",
+          "lastPlayedAt",
+          "batchCreatedAt"
+        ])
+        && request.resource.data.tenantId == tenantId
+        && request.resource.data.batchId == batchId
+        && request.resource.data.totalPlays > 0
+        && request.resource.data.screenId is string
+        && request.resource.data.playerKey is string
+        && screenDoc(tenantId, request.resource.data.screenId).data.playerKey
+          == request.resource.data.playerKey
+        && screenDoc(tenantId, request.resource.data.screenId).data.status
+          == "active";
+    }
+
     match /users/{uid} {
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -68,6 +99,15 @@ service cloud.firestore {
         && request.resource.data.accountType == resource.data.accountType;
 
       allow delete: if false;
+
+      match /proofBatches/{batchId} {
+        allow create: if validProofBatch(tenantId, batchId);
+
+        allow update: if validProofBatch(tenantId, batchId)
+          && request.resource.data == resource.data;
+
+        allow delete: if false;
+      }
 
       match /{document=**} {
         allow read: if belongsToTenant(tenantId);

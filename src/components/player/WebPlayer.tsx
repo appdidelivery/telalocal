@@ -3,80 +3,94 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cacheManifestMedia,
-  fetchLatestManifest,
   getPlayableUrl,
-  markManifestCheckedToday,
   queueProofOfPlay,
   readManifest,
   saveManifest,
-  wasManifestCheckedToday,
+  subscribeToManifest,
+  syncProofOfPlay,
   type PlayerManifest,
 } from "@/lib/player/offline";
 
 type PlayerStatus = "starting" | "ready" | "offline" | "waiting" | "error";
 
-export default function WebPlayer({ screenId }: { screenId: string }) {
+export default function WebPlayer({
+  screenId,
+  playerKey,
+}: {
+  screenId: string;
+  playerKey: string;
+}) {
   const [manifest, setManifest] = useState<PlayerManifest | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [index, setIndex] = useState(0);
   const [status, setStatus] = useState<PlayerStatus>("starting");
   const [online, setOnline] = useState(true);
   const objectUrlsRef = useRef<string[]>([]);
-  const currentVersionRef = useRef<number | null>(null);
+  const manifestRef = useRef<PlayerManifest | null>(null);
+  const preparingVersionRef = useRef<number | null>(null);
 
   const preparePlayback = useCallback(async (nextManifest: PlayerManifest) => {
+    if (
+      manifestRef.current?.version === nextManifest.version ||
+      preparingVersionRef.current === nextManifest.version
+    ) {
+      return;
+    }
+
+    preparingVersionRef.current = nextManifest.version;
+
     try {
-      await cacheManifestMedia(nextManifest);
-    } catch {
-      // Se algum cache falhar, o player ainda tenta reproduzir pela CDN.
+      try {
+        await cacheManifestMedia(nextManifest);
+      } catch {
+        // Se algum cache falhar, o player ainda tenta reproduzir pela CDN.
+      }
+
+      const pairs = await Promise.all(
+        nextManifest.items.map(async (item) => [
+          item.campaignId,
+          await getPlayableUrl(item.mediaUrl),
+        ] as const)
+      );
+
+      for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
+      objectUrlsRef.current = [];
+
+      const nextUrls: Record<string, string> = {};
+      for (const [campaignId, url] of pairs) {
+        nextUrls[campaignId] = url;
+        if (url.startsWith("blob:")) objectUrlsRef.current.push(url);
+      }
+
+      manifestRef.current = nextManifest;
+      await saveManifest(nextManifest);
+      setUrls(nextUrls);
+      setManifest(nextManifest);
+      setIndex(0);
+      setStatus(navigator.onLine ? "ready" : "offline");
+    } finally {
+      preparingVersionRef.current = null;
     }
-
-    const pairs = await Promise.all(
-      nextManifest.items.map(async (item) => [
-        item.campaignId,
-        await getPlayableUrl(item.mediaUrl),
-      ] as const)
-    );
-
-    for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
-    objectUrlsRef.current = [];
-
-    const nextUrls: Record<string, string> = {};
-    for (const [campaignId, url] of pairs) {
-      nextUrls[campaignId] = url;
-      if (url.startsWith("blob:")) objectUrlsRef.current.push(url);
-    }
-
-    currentVersionRef.current = nextManifest.version;
-    setUrls(nextUrls);
-    setManifest(nextManifest);
-    setIndex(0);
-    setStatus(navigator.onLine ? "ready" : "offline");
   }, []);
 
-  const syncFromNetwork = useCallback(
+  const trySyncProof = useCallback(
     async (force = false) => {
-      if (!navigator.onLine) return;
-
-      if (!force && wasManifestCheckedToday(screenId)) {
-        return;
-      }
+      const currentManifest = manifestRef.current;
+      if (!currentManifest || !playerKey) return;
 
       try {
-        const latest = await fetchLatestManifest(screenId);
-        markManifestCheckedToday(screenId);
-
-        if (latest.version !== currentVersionRef.current) {
-          await saveManifest(latest);
-          await preparePlayback(latest);
-        } else {
-          setStatus("ready");
-        }
+        await syncProofOfPlay({
+          tenantId: currentManifest.tenantId,
+          screenId,
+          playerKey,
+          force,
+        });
       } catch {
-        // Mantém o último manifesto local caso a rede ou o Firestore falhem.
+        // O Proof of Play permanece na fila local e será reenviado depois.
       }
     },
-    [preparePlayback, screenId]
+    [playerKey, screenId]
   );
 
   useEffect(() => {
@@ -89,7 +103,6 @@ export default function WebPlayer({ screenId }: { screenId: string }) {
 
     (async () => {
       const cached = await readManifest(screenId).catch(() => undefined);
-
       if (!active) return;
 
       if (cached) {
@@ -97,36 +110,47 @@ export default function WebPlayer({ screenId }: { screenId: string }) {
       } else {
         setStatus(navigator.onLine ? "starting" : "waiting");
       }
-
-      if (navigator.onLine && (!cached || !wasManifestCheckedToday(screenId))) {
-        await syncFromNetwork(!cached);
-      }
-
-      if (!cached && currentVersionRef.current === null) {
-        setStatus(navigator.onLine ? "waiting" : "offline");
-      }
     })();
+
+    const unsubscribe = subscribeToManifest(
+      screenId,
+      async (latest) => {
+        if (!active) return;
+        await preparePlayback(latest);
+      },
+      () => {
+        if (!manifestRef.current) setStatus("waiting");
+      }
+    );
 
     const handleOnline = () => {
       setOnline(true);
-      syncFromNetwork(false);
+      setStatus(manifestRef.current ? "ready" : "starting");
+      trySyncProof(false);
     };
 
     const handleOffline = () => {
       setOnline(false);
-      setStatus(currentVersionRef.current ? "offline" : "waiting");
+      setStatus(manifestRef.current ? "offline" : "waiting");
     };
+
+    const proofInterval = window.setInterval(
+      () => trySyncProof(false),
+      5 * 60 * 1000
+    );
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
     return () => {
       active = false;
+      unsubscribe();
+      window.clearInterval(proofInterval);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
     };
-  }, [preparePlayback, screenId, syncFromNetwork]);
+  }, [preparePlayback, screenId, trySyncProof]);
 
   const current = useMemo(() => {
     if (!manifest?.items.length) return null;
@@ -142,8 +166,9 @@ export default function WebPlayer({ screenId }: { screenId: string }) {
         campaignId: current.campaignId,
         manifestVersion: manifest.version,
       });
+      await trySyncProof(false);
     } catch {
-      // O log local não pode interromper a exibição.
+      // O log local nunca pode interromper a exibição.
     }
 
     setIndex((value) =>

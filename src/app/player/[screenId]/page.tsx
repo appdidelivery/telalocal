@@ -8,9 +8,14 @@ export const metadata: Metadata = {
 
 export default async function ScreenPlayer({
   params,
+  searchParams,
 }: {
   params: Promise<{ screenId: string }>;
+  searchParams: Promise<{ k?: string | string[] }>;
 }) {
   const { screenId } = await params;
-  return <WebPlayer screenId={screenId} />;
+  const query = await searchParams;
+  const playerKey = Array.isArray(query.k) ? query.k[0] ?? "" : query.k ?? "";
+
+  return <WebPlayer screenId={screenId} playerKey={playerKey} />;
 }

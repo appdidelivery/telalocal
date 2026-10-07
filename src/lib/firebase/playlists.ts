@@ -25,6 +25,7 @@ export type PlayerManifestItem = {
 export type PlayerManifest = {
   schemaVersion: 1;
   version: number;
+  tenantId: string;
   screenId: string;
   generatedAt: string;
   items: PlayerManifestItem[];
@@ -69,6 +70,7 @@ export async function publishPlaylist(
   const manifest: PlayerManifest = {
     schemaVersion: 1,
     version,
+    tenantId: context.tenantId,
     screenId: screen.id,
     generatedAt: new Date().toISOString(),
     items: campaigns.map((campaign) => ({
@@ -123,7 +125,6 @@ export async function publishPlaylist(
 
   batch.set(publicManifestRef, {
     ...manifest,
-    tenantId: context.tenantId,
     ownerUid: context.ownerUid,
     status: "published",
     updatedAt: serverTimestamp(),

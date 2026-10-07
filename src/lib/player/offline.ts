@@ -1,4 +1,9 @@
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+  type Unsubscribe,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 
 export type PlayerManifestItem = {
@@ -13,9 +18,20 @@ export type PlayerManifestItem = {
 export type PlayerManifest = {
   schemaVersion: 1;
   version: number;
+  tenantId: string;
   screenId: string;
   generatedAt: string;
   items: PlayerManifestItem[];
+};
+
+type ProofLog = {
+  id: string;
+  screenId: string;
+  campaignId: string;
+  manifestVersion: number;
+  playedAt: string;
+  batchId?: string;
+  batchCreatedAt?: string;
 };
 
 const DB_NAME = "telalocal-player";
@@ -23,7 +39,8 @@ const DB_VERSION = 1;
 const MANIFEST_STORE = "manifests";
 const LOG_STORE = "proof-of-play";
 const MEDIA_CACHE = "telalocal-media-v1";
-const MANIFEST_CHECK_PREFIX = "telalocal:manifest-check:";
+const LAST_SYNC_PREFIX = "telalocal:proof-last-sync:";
+const SYNC_INTERVAL_MS = 60 * 60 * 1000;
 
 function openDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -44,30 +61,12 @@ function openDb() {
   });
 }
 
-function currentDayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function wasManifestCheckedToday(screenId: string) {
-  try {
-    return (
-      window.localStorage.getItem(`${MANIFEST_CHECK_PREFIX}${screenId}`) ===
-      currentDayKey()
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function markManifestCheckedToday(screenId: string) {
-  try {
-    window.localStorage.setItem(
-      `${MANIFEST_CHECK_PREFIX}${screenId}`,
-      currentDayKey()
-    );
-  } catch {
-    // TVs com storage restrito continuam funcionando sem essa otimização.
-  }
+function randomBatchId(screenId: string) {
+  const suffix =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return `${screenId}_${Date.now()}_${suffix}`;
 }
 
 export async function saveManifest(manifest: PlayerManifest) {
@@ -93,6 +92,30 @@ export async function readManifest(screenId: string) {
   return result;
 }
 
+export function subscribeToManifest(
+  screenId: string,
+  onManifest: (manifest: PlayerManifest) => void,
+  onError?: () => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, "playerManifests", screenId),
+    (snapshot) => {
+      if (!snapshot.exists()) return;
+
+      const data = snapshot.data();
+      onManifest({
+        schemaVersion: 1,
+        version: Number(data.version),
+        tenantId: String(data.tenantId ?? ""),
+        screenId: String(data.screenId),
+        generatedAt: String(data.generatedAt),
+        items: Array.isArray(data.items) ? data.items : [],
+      });
+    },
+    () => onError?.()
+  );
+}
+
 export async function queueProofOfPlay(input: {
   screenId: string;
   campaignId: string;
@@ -100,13 +123,12 @@ export async function queueProofOfPlay(input: {
 }) {
   const db = await openDb();
   const now = Date.now();
-  const record = {
+  const record: ProofLog = {
     id: `${input.screenId}:${input.campaignId}:${now}:${Math.random()
       .toString(36)
       .slice(2)}`,
     ...input,
     playedAt: new Date(now).toISOString(),
-    synced: false,
   };
 
   await new Promise<void>((resolve, reject) => {
@@ -116,6 +138,164 @@ export async function queueProofOfPlay(input: {
     tx.onerror = () => reject(tx.error);
   });
   db.close();
+}
+
+async function readProofLogs() {
+  const db = await openDb();
+  const logs = await new Promise<ProofLog[]>((resolve, reject) => {
+    const tx = db.transaction(LOG_STORE, "readonly");
+    const request = tx.objectStore(LOG_STORE).getAll();
+    request.onsuccess = () => resolve((request.result ?? []) as ProofLog[]);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return logs;
+}
+
+async function assignBatch(logs: ProofLog[], batchId: string, batchCreatedAt: string) {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(LOG_STORE, "readwrite");
+    const store = tx.objectStore(LOG_STORE);
+
+    for (const log of logs) {
+      store.put({ ...log, batchId, batchCreatedAt });
+    }
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+async function deleteProofLogs(ids: string[]) {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(LOG_STORE, "readwrite");
+    const store = tx.objectStore(LOG_STORE);
+
+    for (const id of ids) store.delete(id);
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+async function nextProofBatch(screenId: string) {
+  const all = (await readProofLogs())
+    .filter((log) => log.screenId === screenId)
+    .sort((a, b) => a.playedAt.localeCompare(b.playedAt));
+
+  if (all.length === 0) return null;
+
+  const alreadyClaimed = all.find((log) => log.batchId);
+  if (alreadyClaimed?.batchId) {
+    return {
+      batchId: alreadyClaimed.batchId,
+      batchCreatedAt:
+        alreadyClaimed.batchCreatedAt ?? alreadyClaimed.playedAt,
+      logs: all.filter((log) => log.batchId === alreadyClaimed.batchId),
+    };
+  }
+
+  const date = all[0].playedAt.slice(0, 10);
+  const logs = all.filter(
+    (log) => !log.batchId && log.playedAt.slice(0, 10) === date
+  );
+  const batchId = randomBatchId(screenId);
+  const batchCreatedAt = new Date().toISOString();
+
+  await assignBatch(logs, batchId, batchCreatedAt);
+
+  return { batchId, batchCreatedAt, logs };
+}
+
+function canSyncProof(screenId: string) {
+  try {
+    const last = Number(
+      window.localStorage.getItem(`${LAST_SYNC_PREFIX}${screenId}`) ?? "0"
+    );
+    return !last || Date.now() - last >= SYNC_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markProofSynced(screenId: string) {
+  try {
+    window.localStorage.setItem(
+      `${LAST_SYNC_PREFIX}${screenId}`,
+      String(Date.now())
+    );
+  } catch {}
+}
+
+export async function syncProofOfPlay(input: {
+  tenantId: string;
+  screenId: string;
+  playerKey: string;
+  force?: boolean;
+}) {
+  if (!navigator.onLine || !input.tenantId || !input.playerKey) {
+    return { synced: 0 };
+  }
+
+  if (!input.force && !canSyncProof(input.screenId)) {
+    return { synced: 0 };
+  }
+
+  let synced = 0;
+
+  while (true) {
+    const batch = await nextProofBatch(input.screenId);
+    if (!batch) break;
+
+    const campaignCounts: Record<string, number> = {};
+    let manifestVersion = 0;
+
+    for (const log of batch.logs) {
+      campaignCounts[log.campaignId] =
+        (campaignCounts[log.campaignId] ?? 0) + 1;
+      manifestVersion = Math.max(manifestVersion, log.manifestVersion);
+    }
+
+    const firstPlayedAt = batch.logs[0].playedAt;
+    const lastPlayedAt = batch.logs[batch.logs.length - 1].playedAt;
+    const date = firstPlayedAt.slice(0, 10);
+
+    const record = {
+      tenantId: input.tenantId,
+      screenId: input.screenId,
+      playerKey: input.playerKey,
+      batchId: batch.batchId,
+      date,
+      totalPlays: batch.logs.length,
+      campaignCounts,
+      manifestVersion,
+      firstPlayedAt,
+      lastPlayedAt,
+      batchCreatedAt: batch.batchCreatedAt,
+    };
+
+    await setDoc(
+      doc(
+        db,
+        "tenants",
+        input.tenantId,
+        "proofBatches",
+        batch.batchId
+      ),
+      record
+    );
+
+    await deleteProofLogs(batch.logs.map((log) => log.id));
+    synced += batch.logs.length;
+  }
+
+  if (synced > 0) markProofSynced(input.screenId);
+
+  return { synced };
 }
 
 export async function cacheManifestMedia(manifest: PlayerManifest) {
@@ -147,22 +327,4 @@ export async function getPlayableUrl(mediaUrl: string) {
 
   const blob = await response.blob();
   return URL.createObjectURL(blob);
-}
-
-export async function fetchLatestManifest(screenId: string) {
-  const snapshot = await getDoc(doc(db, "playerManifests", screenId));
-
-  if (!snapshot.exists()) {
-    throw new Error("manifest/not-found");
-  }
-
-  const data = snapshot.data();
-
-  return {
-    schemaVersion: 1,
-    version: Number(data.version),
-    screenId: String(data.screenId),
-    generatedAt: String(data.generatedAt),
-    items: Array.isArray(data.items) ? data.items : [],
-  } as PlayerManifest;
 }

@@ -67,22 +67,43 @@ export default function PanelClient() {
             JSON.stringify({ tenantId, ownerUid: user.uid })
           );
 
-          const [screenCountSnapshot, campaignCountSnapshot] = await Promise.all([
-            getCountFromServer(
-              query(
-                collection(db, "tenants", tenantId, "screens"),
-                where("ownerUid", "==", user.uid)
-              )
-            ),
-            getCountFromServer(
-              query(
-                collection(db, "tenants", tenantId, "campaigns"),
-                where("ownerUid", "==", user.uid)
-              )
-            ),
-          ]);
+          const now = new Date();
+          const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+          const [screenCountSnapshot, campaignCountSnapshot, proofSnapshot] =
+            await Promise.all([
+              getCountFromServer(
+                query(
+                  collection(db, "tenants", tenantId, "screens"),
+                  where("ownerUid", "==", user.uid)
+                )
+              ),
+              getCountFromServer(
+                query(
+                  collection(db, "tenants", tenantId, "campaigns"),
+                  where("ownerUid", "==", user.uid)
+                )
+              ),
+              getDocs(
+                query(
+                  collection(db, "tenants", tenantId, "proofBatches"),
+                  where("date", "==", today)
+                )
+              ),
+            ]);
+
           setScreenCount(screenCountSnapshot.data().count);
           setCampaignCount(campaignCountSnapshot.data().count);
+
+          let totalToday = 0;
+          const activeScreenIds = new Set<string>();
+          proofSnapshot.forEach((item) => {
+            const data = item.data();
+            totalToday += Number(data.totalPlays ?? 0);
+            if (data.screenId) activeScreenIds.add(String(data.screenId));
+          });
+          setPlaysToday(totalToday);
+          setActivePlayersToday(activeScreenIds.size);
         }
 
         setProfile({
@@ -138,7 +159,7 @@ export default function PanelClient() {
           <Link className="side-link" href="/painel/telas">Telas</Link>
           <Link className="side-link" href="/painel/campanhas">Campanhas</Link>
           <Link className="side-link" href="/painel/playlists">Playlists</Link>
-          <span className="side-link disabled">Proof of Play</span>
+          <Link className="side-link" href="/painel/proof-of-play">Proof of Play</Link>
         </div>
       </aside>
 

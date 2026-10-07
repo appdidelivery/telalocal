@@ -22,6 +22,7 @@ export type ScreenRecord = {
   state: string;
   status: "active" | "paused";
   playerPath: string;
+  playerKey?: string;
   createdAt?: { seconds?: number };
 };
 
@@ -40,6 +41,16 @@ type TenantContext = {
 };
 
 const CACHE_KEY = "telalocal:tenant-context";
+
+function createPlayerKey() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function playerPath(screenId: string, playerKey: string) {
+  return `/player/${screenId}?k=${encodeURIComponent(playerKey)}`;
+}
 
 export async function getTenantContext(): Promise<TenantContext> {
   const user = auth.currentUser;
@@ -74,9 +85,39 @@ export async function listScreens(context: TenantContext): Promise<ScreenRecord[
     query(screensRef, where("ownerUid", "==", context.ownerUid))
   );
 
-  return snapshot.docs
-    .map((item) => ({ id: item.id, ...item.data() } as ScreenRecord))
-    .sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+  const batch = writeBatch(db);
+  let migrations = 0;
+
+  const screens = snapshot.docs.map((item) => {
+    const data = item.data();
+    const existingKey = String(data.playerKey ?? "");
+    const key = existingKey || createPlayerKey();
+    const securePath = playerPath(item.id, key);
+
+    if (!existingKey || data.playerPath !== securePath) {
+      batch.update(item.ref, {
+        playerKey: key,
+        playerPath: securePath,
+        updatedAt: serverTimestamp(),
+      });
+      migrations += 1;
+    }
+
+    return {
+      id: item.id,
+      ...data,
+      playerKey: key,
+      playerPath: securePath,
+    } as ScreenRecord;
+  });
+
+  if (migrations > 0) {
+    await batch.commit();
+  }
+
+  return screens.sort(
+    (a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)
+  );
 }
 
 export async function createPointAndScreen(
@@ -86,6 +127,8 @@ export async function createPointAndScreen(
   const pointRef = doc(collection(db, "tenants", context.tenantId, "points"));
   const screenRef = doc(collection(db, "tenants", context.tenantId, "screens"));
   const batch = writeBatch(db);
+  const playerKey = createPlayerKey();
+  const securePlayerPath = playerPath(screenRef.id, playerKey);
 
   const shared = {
     tenantId: context.tenantId,
@@ -112,7 +155,8 @@ export async function createPointAndScreen(
     category: input.category.trim(),
     city: input.city.trim(),
     state: input.state.trim().toUpperCase(),
-    playerPath: `/player/${screenRef.id}`,
+    playerKey,
+    playerPath: securePlayerPath,
     manifestVersion: 0,
     playlistStatus: "empty",
   });
@@ -128,6 +172,7 @@ export async function createPointAndScreen(
     city: input.city.trim(),
     state: input.state.trim().toUpperCase(),
     status: "active",
-    playerPath: `/player/${screenRef.id}`,
+    playerKey,
+    playerPath: securePlayerPath,
   };
 }
