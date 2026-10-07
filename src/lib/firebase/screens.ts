@@ -44,6 +44,15 @@ export type HeartbeatRecord = {
   userAgent?: string;
   viewport?: string;
   appVersion?: string;
+  browserFamily?: string;
+  browserVersion?: string;
+  compatMode?: boolean;
+  supportsServiceWorker?: boolean;
+  supportsIndexedDb?: boolean;
+  supportsCacheStorage?: boolean;
+  supportsFullscreen?: boolean;
+  h264Support?: string;
+  platform?: string;
 };
 
 export type CreateScreenInput = {
