@@ -20,6 +20,16 @@ type Preset = {
   accent2: string;
 };
 
+type NicheSuggestion = {
+  id: string;
+  label: string;
+  presetId: string;
+  headline: string;
+  subtitle: string;
+  cta: string;
+  coupon?: string;
+};
+
 const PRESETS: Preset[] = [
   {
     id: "oferta",
@@ -94,6 +104,59 @@ const NICHES = [
   "Oficina",
   "Outro",
 ];
+
+const NICHE_SUGGESTIONS: Record<string, NicheSuggestion[]> = {
+  Hamburgueria: [
+    { id: "burger-combo", label: "Combo do dia", presetId: "produto", headline: "Combo completo", subtitle: "Burger + fritas + bebida", cta: "Peça agora pelo QR" },
+    { id: "burger-primeiro", label: "Primeiro pedido", presetId: "primeira-compra", headline: "50% OFF no 1º pedido", subtitle: "Experimente hoje com desconto", cta: "Resgate no QR", coupon: "PRIMEIRO50" },
+    { id: "burger-cashback", label: "Cashback", presetId: "cashback", headline: "10% de cashback", subtitle: "Volte e use no próximo pedido", cta: "Ative seu cashback" },
+    { id: "burger-fidelidade", label: "Fidelidade", presetId: "fidelidade", headline: "Seu burger rende pontos", subtitle: "Compre, acumule e ganhe benefícios", cta: "Entre para o clube" },
+    { id: "burger-happy", label: "Happy Hour", presetId: "oferta", headline: "Happy Hour do Burger", subtitle: "Oferta válida por tempo limitado", cta: "Veja a oferta no QR" },
+    { id: "burger-whatsapp", label: "Peça no WhatsApp", presetId: "whatsapp", headline: "Seu burger está a um QR", subtitle: "Escaneie e faça seu pedido", cta: "Abrir WhatsApp" },
+  ],
+  Barbearia: [
+    { id: "barber-primeiro", label: "Primeiro corte", presetId: "primeira-compra", headline: "50% OFF no 1º corte", subtitle: "Seu primeiro atendimento com desconto", cta: "Agende pelo QR", coupon: "CORTE50" },
+    { id: "barber-combo", label: "Corte + barba", presetId: "produto", headline: "Corte + barba", subtitle: "Visual completo em uma visita", cta: "Agende agora" },
+    { id: "barber-cashback", label: "Cashback", presetId: "cashback", headline: "Ganhe cashback no corte", subtitle: "Use no seu próximo atendimento", cta: "Ative pelo QR" },
+    { id: "barber-clube", label: "Clube fidelidade", presetId: "fidelidade", headline: "Cliente fiel tem vantagem", subtitle: "Benefícios em cada retorno", cta: "Entre para o clube" },
+    { id: "barber-hoje", label: "Horário hoje", presetId: "oferta", headline: "Tem horário hoje", subtitle: "Reserve sua vaga em segundos", cta: "Agende pelo WhatsApp" },
+    { id: "barber-whatsapp", label: "WhatsApp", presetId: "whatsapp", headline: "Agende sem esperar", subtitle: "Abra o WhatsApp pelo QR", cta: "Falar com a barbearia" },
+  ],
+  Padaria: [
+    { id: "padaria-cafe", label: "Café da manhã", presetId: "produto", headline: "Café fresquinho + combo", subtitle: "Comece o dia com sabor", cta: "Veja o combo no QR" },
+    { id: "padaria-oferta", label: "Oferta do dia", presetId: "oferta", headline: "Oferta quentinha do dia", subtitle: "Aproveite enquanto dura", cta: "Escaneie e confira" },
+    { id: "padaria-fidelidade", label: "Fidelidade", presetId: "fidelidade", headline: "Volte e ganhe benefícios", subtitle: "Seu café de todo dia vale pontos", cta: "Entre para o clube" },
+    { id: "padaria-cashback", label: "Cashback", presetId: "cashback", headline: "Cashback na próxima compra", subtitle: "Economize cada vez que voltar", cta: "Ative agora" },
+  ],
+  Restaurante: [
+    { id: "rest-prato", label: "Prato do dia", presetId: "produto", headline: "Prato do dia", subtitle: "Sabor especial por tempo limitado", cta: "Veja o cardápio" },
+    { id: "rest-primeiro", label: "Primeira visita", presetId: "primeira-compra", headline: "Benefício na 1ª visita", subtitle: "Escaneie e resgate sua oferta", cta: "Resgatar no QR" },
+    { id: "rest-clube", label: "Clube", presetId: "fidelidade", headline: "Clube de clientes", subtitle: "Mais visitas, mais vantagens", cta: "Quero participar" },
+    { id: "rest-whatsapp", label: "Reserva", presetId: "whatsapp", headline: "Reserve sua mesa", subtitle: "Fale com a equipe pelo WhatsApp", cta: "Reservar agora" },
+  ],
+  Mercado: [
+    { id: "mercado-oferta", label: "Oferta relâmpago", presetId: "oferta", headline: "Oferta relâmpago", subtitle: "Preço especial enquanto durar", cta: "Confira no QR" },
+    { id: "mercado-produto", label: "Produto destaque", presetId: "produto", headline: "Destaque da semana", subtitle: "Economia que vale a visita", cta: "Ver oferta" },
+    { id: "mercado-clube", label: "Clube de ofertas", presetId: "fidelidade", headline: "Clube de vantagens", subtitle: "Ofertas exclusivas para membros", cta: "Entrar para o clube" },
+    { id: "mercado-cashback", label: "Cashback", presetId: "cashback", headline: "Compre e ganhe cashback", subtitle: "Economia para a próxima compra", cta: "Ativar benefício" },
+  ],
+  Academia: [
+    { id: "academia-aula", label: "Aula experimental", presetId: "primeira-compra", headline: "Sua 1ª aula é por nossa conta", subtitle: "Venha conhecer a academia", cta: "Agende pelo QR" },
+    { id: "academia-plano", label: "Plano especial", presetId: "oferta", headline: "Plano com condição especial", subtitle: "Comece hoje sua nova rotina", cta: "Quero saber mais" },
+    { id: "academia-indique", label: "Indique e ganhe", presetId: "cashback", headline: "Indique um amigo e ganhe", subtitle: "Benefícios para treinar junto", cta: "Participar agora" },
+  ],
+  Clínica: [
+    { id: "clinica-avaliacao", label: "Avaliação", presetId: "primeira-compra", headline: "Agende sua avaliação", subtitle: "Comece seu atendimento com facilidade", cta: "Agendar pelo QR" },
+    { id: "clinica-servico", label: "Serviço destaque", presetId: "produto", headline: "Cuidado em destaque", subtitle: "Conheça este serviço da clínica", cta: "Saiba mais" },
+    { id: "clinica-whatsapp", label: "Agendamento", presetId: "whatsapp", headline: "Agende pelo WhatsApp", subtitle: "Escaneie e fale com nossa equipe", cta: "Abrir WhatsApp" },
+  ],
+  Oficina: [
+    { id: "oficina-revisao", label: "Revisão", presetId: "produto", headline: "Hora da revisão?", subtitle: "Cuide do seu carro antes do problema", cta: "Agende pelo QR" },
+    { id: "oficina-primeiro", label: "Primeiro serviço", presetId: "primeira-compra", headline: "Oferta no 1º serviço", subtitle: "Conheça nossa oficina com vantagem", cta: "Resgate pelo QR" },
+    { id: "oficina-whatsapp", label: "Orçamento", presetId: "whatsapp", headline: "Peça seu orçamento", subtitle: "Fale com a oficina pelo WhatsApp", cta: "Solicitar orçamento" },
+  ],
+  Outro: [],
+};
 
 function wrapText(
   ctx: CanvasRenderingContext2D,
@@ -201,11 +264,26 @@ export default function TemplateStudioClient() {
     });
   }, [router]);
 
-  useEffect(() => {
-    setHeadline(preset.title);
-    setSubtitle(preset.subtitle);
-    setCta(preset.cta);
-  }, [preset]);
+  function applyPreset(item: Preset) {
+    setPresetId(item.id);
+    setHeadline(item.title);
+    setSubtitle(item.subtitle);
+    setCta(item.cta);
+  }
+
+  function applySuggestion(item: NicheSuggestion) {
+    const targetPreset =
+      PRESETS.find((presetItem) => presetItem.id === item.presetId) ?? PRESETS[0];
+
+    setPresetId(targetPreset.id);
+    setHeadline(item.headline);
+    setSubtitle(item.subtitle);
+    setCta(item.cta);
+    setCampaignName(`${niche} · ${item.label}`);
+    if (item.coupon) setCouponCode(item.coupon);
+  }
+
+  const nicheSuggestions = NICHE_SUGGESTIONS[niche] ?? [];
 
   useEffect(() => {
     if (!photo) {
@@ -404,7 +482,7 @@ export default function TemplateStudioClient() {
                 key={item.id}
                 type="button"
                 className={item.id === presetId ? "template-preset active" : "template-preset"}
-                onClick={() => setPresetId(item.id)}
+                onClick={() => applyPreset(item)}
               >
                 <span style={{ background: item.accent }} />
                 <strong>{item.label}</strong>
@@ -419,6 +497,28 @@ export default function TemplateStudioClient() {
                 {NICHES.map((item) => <option key={item}>{item}</option>)}
               </select>
             </div>
+
+            {nicheSuggestions.length > 0 ? (
+              <div className="niche-suggestions">
+                <div className="niche-suggestions-head">
+                  <strong>Sugestões prontas para {niche}</strong>
+                  <small>Um toque já preenche a campanha.</small>
+                </div>
+                <div className="niche-suggestion-grid">
+                  {nicheSuggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="niche-suggestion"
+                      onClick={() => applySuggestion(item)}
+                    >
+                      <strong>{item.label}</strong>
+                      <span>{item.headline}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="field">
               <label htmlFor="template-advertiser">Nome do negócio</label>
