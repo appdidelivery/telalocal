@@ -91,9 +91,12 @@ export default function ScreensClient() {
         <div>
           <div className="eyebrow">REDE DE TELAS</div>
           <h1>Telas e pontos físicos</h1>
-          <p className="muted">Cada nova tela recebe um identificador e uma URL exclusiva do Web Player.</p>
+          <p className="muted">Cadastre as telas, abra telalocal.vercel.app/tv na Smart TV e faça o pareamento por código.</p>
         </div>
-        <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
+        <div className="screen-actions">
+          <Link className="btn primary" href="/painel/parear-tv">Parear TV</Link>
+          <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
+        </div>
       </div>
 
       <div className="two-column">

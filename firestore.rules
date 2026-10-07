@@ -162,6 +162,67 @@ service cloud.firestore {
       }
     }
 
+    match /pairRequests/{pairId} {
+      allow create: if request.resource.data.keys().hasOnly([
+          "pairId",
+          "code",
+          "status",
+          "createdAtMs",
+          "expiresAtMs"
+        ])
+        && request.resource.data.pairId == pairId
+        && request.resource.data.code is string
+        && request.resource.data.code.size() == 6
+        && request.resource.data.status == "pending"
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.expiresAtMs is int
+        && request.resource.data.expiresAtMs > request.resource.data.createdAtMs
+        && request.resource.data.expiresAtMs
+          <= request.resource.data.createdAtMs + 600000;
+
+      allow get: if true;
+      allow list: if signedIn();
+
+      allow update: if signedIn()
+        && resource.data.status == "pending"
+        && request.resource.data.keys().hasOnly([
+          "pairId",
+          "code",
+          "status",
+          "createdAtMs",
+          "expiresAtMs",
+          "tenantId",
+          "ownerUid",
+          "screenId",
+          "playerKey",
+          "pairedAtMs"
+        ])
+        && request.resource.data.pairId == resource.data.pairId
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.expiresAtMs == resource.data.expiresAtMs
+        && request.resource.data.status == "paired"
+        && request.resource.data.tenantId == userTenantId()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.pairedAtMs is int
+        && request.resource.data.screenId is string
+        && request.resource.data.playerKey is string
+        && screenDoc(
+          userTenantId(),
+          request.resource.data.screenId
+        ).data.ownerUid == request.auth.uid
+        && screenDoc(
+          userTenantId(),
+          request.resource.data.screenId
+        ).data.playerKey == request.resource.data.playerKey
+        && screenDoc(
+          userTenantId(),
+          request.resource.data.screenId
+        ).data.status == "active";
+
+      allow delete: if false;
+    }
+
     match /screenAliases/{shortCode} {
       allow read: if true;
 
