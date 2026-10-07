@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Image from "next/image";\nimport Link from "next/link";
 
 const schema = {
   "@context": "https://schema.org",
@@ -77,9 +77,9 @@ export default function Home() {
       />
 
       <header className="wrap nav">
-        <div className="brand">
-          Tela<span>Local</span>
-        </div>
+        <Link href="/" aria-label="TelaLocal - página inicial">
+          <Image src="/telalocal-logo.svg" alt="TelaLocal" width={220} height={60} priority style={{ width: 220, height: "auto" }} />
+        </Link>
         <nav className="navlinks">
           <a href="#como-funciona">Como funciona</a>
           <a href="#ganha-ganha">Modelo</a>
