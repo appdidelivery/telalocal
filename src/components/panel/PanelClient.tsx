@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";\nimport Link from "next/link";
+import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
