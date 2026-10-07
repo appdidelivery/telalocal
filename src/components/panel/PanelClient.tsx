@@ -29,6 +29,8 @@ export default function PanelClient() {
   const [profile, setProfile] = useState<PanelProfile | null>(null);
   const [screenCount, setScreenCount] = useState(0);
   const [campaignCount, setCampaignCount] = useState(0);
+  const [playsToday, setPlaysToday] = useState(0);
+  const [activePlayersToday, setActivePlayersToday] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -180,8 +182,8 @@ export default function PanelClient() {
         <div className="stats">
           <div className="stat"><span className="muted">Telas cadastradas</span><b>{screenCount}</b></div>
           <div className="stat"><span className="muted">Campanhas</span><b>{campaignCount}</b></div>
-          <div className="stat"><span className="muted">Exibições hoje</span><b>0</b></div>
-          <div className="stat"><span className="muted">Players online</span><b>0</b></div>
+          <div className="stat"><span className="muted">Exibições hoje</span><b>{playsToday}</b></div>
+          <div className="stat"><span className="muted">Players ativos hoje</span><b>{activePlayersToday}</b></div>
         </div>
 
         <div className="section">
