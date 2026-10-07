@@ -7,6 +7,9 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   getDocs,
+  limit,
+  query,
+  where,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { listCampaigns, type CampaignRecord } from "@/lib/firebase/campaigns";
@@ -37,14 +40,19 @@ export default function AdvertiserClient() {
 
       try {
         const [inventorySnapshot, campaignList] = await Promise.all([
-          getDocs(collection(db, "networkInventory")),
+          getDocs(
+            query(
+              collection(db, "networkInventory"),
+              where("status", "==", "active"),
+              limit(200)
+            )
+          ),
           listCampaigns(),
         ]);
 
         setInventory(
           inventorySnapshot.docs
             .map((item) => item.data() as InventoryItem)
-            .filter((item) => item.status === "active")
         );
         setCampaigns(campaignList);
       } catch {
