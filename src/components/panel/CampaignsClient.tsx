@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase/client";
 import {
   createCampaign,
   listCampaigns,
+  updateCampaignTracking,
   MAX_VIDEO_BYTES,
   type CampaignRecord,
 } from "@/lib/firebase/campaigns";
@@ -147,6 +148,52 @@ export default function CampaignsClient() {
     }
   }
 
+  async function configureTracking(campaign: CampaignRecord) {
+    const whatsapp = window.prompt(
+      "WhatsApp com DDI + DDD + número:",
+      campaign.whatsappNumber || ""
+    );
+    if (whatsapp === null) return;
+
+    const coupon = window.prompt(
+      "Cupom da campanha:",
+      campaign.couponCode || ""
+    );
+    if (coupon === null) return;
+
+    const offer = window.prompt(
+      "Chamada da oferta:",
+      campaign.offerText || campaign.name
+    );
+    if (offer === null) return;
+
+    try {
+      const updated = await updateCampaignTracking(campaign.id, {
+        whatsappNumber: whatsapp,
+        couponCode: coupon,
+        offerText: offer,
+      });
+
+      setCampaigns((current) =>
+        current.map((item) =>
+          item.id === campaign.id
+            ? {
+                ...item,
+                ...updated,
+                trackingEnabled: Boolean(
+                  updated.whatsappNumber ||
+                    updated.couponCode ||
+                    updated.offerText
+                ),
+              }
+            : item
+        )
+      );
+    } catch {
+      setError("Não foi possível atualizar a conversão da campanha.");
+    }
+  }
+
   if (loading) {
     return <main className="auth-loading"><p className="muted">Carregando campanhas...</p></main>;
   }
@@ -247,6 +294,9 @@ export default function CampaignsClient() {
                     {campaign.couponCode ? <span className="file-summary">Cupom: {campaign.couponCode}</span> : null}
                   </div>
                   <div className="screen-actions">
+                    <button className="btn ghost" type="button" onClick={() => configureTracking(campaign)}>
+                      {campaign.trackingEnabled ? "Editar conversão" : "Configurar conversão"}
+                    </button>
                     <a className="btn ghost" href={campaign.mediaUrl} target="_blank" rel="noreferrer">Ver vídeo</a>
                   </div>
                 </article>
