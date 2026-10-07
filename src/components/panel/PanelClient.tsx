@@ -94,7 +94,12 @@ export default function PanelClient() {
                   where("date", "==", today)
                 )
               ),
-              getDocs(collection(db, "tenants", tenantId, "heartbeats")),
+              getDocs(
+                query(
+                  collection(db, "tenants", tenantId, "heartbeats"),
+                  where("lastSeenAtMs", ">=", Date.now() - 25 * 60 * 1000)
+                )
+              ),
             ]);
 
           setScreenCount(screenCountSnapshot.data().count);
@@ -107,7 +112,7 @@ export default function PanelClient() {
           });
           setPlaysToday(totalToday);
 
-          const onlineCutoff = Date.now() - 7 * 60 * 1000;
+          const onlineCutoff = Date.now() - 25 * 60 * 1000;
           let onlineNow = 0;
           heartbeatSnapshot.forEach((item) => {
             if (Number(item.data().lastSeenAtMs ?? 0) >= onlineCutoff) {
