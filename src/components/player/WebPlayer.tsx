@@ -32,6 +32,7 @@ export default function WebPlayer({
   const [online, setOnline] = useState(true);
   const [origin, setOrigin] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenControlExpanded, setFullscreenControlExpanded] = useState(true);
   const [fullscreenNotice, setFullscreenNotice] = useState("");
 
   const playerRootRef = useRef<HTMLElement | null>(null);
@@ -41,6 +42,27 @@ export default function WebPlayer({
   const preparingVersionRef = useRef<number | null>(null);
   const transitionLockRef = useRef(false);
   const watchdogRef = useRef<number | null>(null);
+  const fullscreenControlTimerRef = useRef<number | null>(null);
+
+  const clearFullscreenControlTimer = useCallback(() => {
+    if (fullscreenControlTimerRef.current !== null) {
+      window.clearTimeout(fullscreenControlTimerRef.current);
+      fullscreenControlTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFullscreenControlCompact = useCallback(() => {
+    clearFullscreenControlTimer();
+    fullscreenControlTimerRef.current = window.setTimeout(() => {
+      setFullscreenControlExpanded(false);
+    }, 3500);
+  }, [clearFullscreenControlTimer]);
+
+  const revealFullscreenControl = useCallback(() => {
+    if (!isFullscreen) return;
+    setFullscreenControlExpanded(true);
+    scheduleFullscreenControlCompact();
+  }, [isFullscreen, scheduleFullscreenControlCompact]);
 
   const toggleFullscreen = useCallback(async () => {
     const doc = document as Document & {
@@ -221,17 +243,27 @@ export default function WebPlayer({
         msFullscreenElement?: Element | null;
       };
 
-      setIsFullscreen(
-        Boolean(
-          document.fullscreenElement ||
-            doc.webkitFullscreenElement ||
-            doc.msFullscreenElement
-        )
+      const fullscreen = Boolean(
+        document.fullscreenElement ||
+          doc.webkitFullscreenElement ||
+          doc.msFullscreenElement
       );
+
+      setIsFullscreen(fullscreen);
+      setFullscreenControlExpanded(true);
+
+      if (fullscreen) {
+        scheduleFullscreenControlCompact();
+      } else {
+        clearFullscreenControlTimer();
+      }
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("pointermove", revealFullscreenControl);
+    window.addEventListener("touchstart", revealFullscreenControl);
+    window.addEventListener("keydown", revealFullscreenControl);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
 
@@ -242,6 +274,10 @@ export default function WebPlayer({
       clearWatchdog();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("pointermove", revealFullscreenControl);
+      window.removeEventListener("touchstart", revealFullscreenControl);
+      window.removeEventListener("keydown", revealFullscreenControl);
+      clearFullscreenControlTimer();
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
 
@@ -249,7 +285,15 @@ export default function WebPlayer({
         URL.revokeObjectURL(url);
       }
     };
-  }, [clearWatchdog, preparePlayback, screenId, trySyncProof]);
+  }, [
+    clearFullscreenControlTimer,
+    clearWatchdog,
+    preparePlayback,
+    revealFullscreenControl,
+    scheduleFullscreenControlCompact,
+    screenId,
+    trySyncProof,
+  ]);
 
   const current = useMemo(() => {
     if (!manifest?.items.length) return null;
@@ -364,10 +408,15 @@ export default function WebPlayer({
       <main className="tv" ref={playerRootRef}>
         <button
           type="button"
-          className="player-fullscreen-btn"
+          className={`player-fullscreen-btn${isFullscreen && !fullscreenControlExpanded ? " compact" : ""}`}
           onClick={toggleFullscreen}
+          title={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
+          aria-label={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
         >
-          {isFullscreen ? "Sair da tela cheia" : "⛶ Tela cheia"}
+          <span className="fullscreen-icon">⛶</span>
+          <span className="fullscreen-label">
+            {isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+          </span>
         </button>
         {fullscreenNotice ? (
           <div className="player-fullscreen-notice">{fullscreenNotice}</div>
@@ -401,10 +450,15 @@ export default function WebPlayer({
     <main className="player-root" ref={playerRootRef}>
       <button
         type="button"
-        className="player-fullscreen-btn"
+        className={`player-fullscreen-btn${isFullscreen && !fullscreenControlExpanded ? " compact" : ""}`}
         onClick={toggleFullscreen}
+        title={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
+        aria-label={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
       >
-        {isFullscreen ? "Sair da tela cheia" : "⛶ Tela cheia"}
+        <span className="fullscreen-icon">⛶</span>
+        <span className="fullscreen-label">
+          {isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+        </span>
       </button>
 
       {fullscreenNotice ? (
