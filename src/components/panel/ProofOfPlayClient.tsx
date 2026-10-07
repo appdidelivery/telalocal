@@ -8,6 +8,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { getTenantContext, listScreens, type ScreenRecord } from "@/lib/firebase/screens";
 import { listCampaigns, type CampaignRecord } from "@/lib/firebase/campaigns";
+import { syncProofOfPlay } from "@/lib/player/offline";
 
 type ProofBatch = {
   id: string;
@@ -49,24 +50,39 @@ export default function ProofOfPlayClient() {
 
       try {
         const context = await getTenantContext();
-        const [proofSnapshot, screenList, campaignList] = await Promise.all([
-          getDocs(
-            query(
-              collection(db, "tenants", context.tenantId, "proofBatches"),
-              where("date", ">=", sevenDaysAgoKey())
-            )
-          ),
+        const [screenList, campaignList] = await Promise.all([
           listScreens(context),
           listCampaigns(),
         ]);
+
+        setScreens(screenList);
+        setCampaigns(campaignList);
+
+        await Promise.allSettled(
+          screenList
+            .filter((screen) => Boolean(screen.playerKey))
+            .map((screen) =>
+              syncProofOfPlay({
+                tenantId: context.tenantId,
+                screenId: screen.id,
+                playerKey: String(screen.playerKey),
+                force: true,
+              })
+            )
+        );
+
+        const proofSnapshot = await getDocs(
+          query(
+            collection(db, "tenants", context.tenantId, "proofBatches"),
+            where("date", ">=", sevenDaysAgoKey())
+          )
+        );
 
         setBatches(
           proofSnapshot.docs.map(
             (item) => ({ id: item.id, ...item.data() } as ProofBatch)
           )
         );
-        setScreens(screenList);
-        setCampaigns(campaignList);
       } catch {
         setError("Não foi possível carregar os dados de Proof of Play.");
       } finally {
