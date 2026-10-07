@@ -18,7 +18,7 @@ import { sendPlayerHeartbeat } from "@/lib/player/heartbeat";
 type PlayerStatus = "starting" | "ready" | "offline" | "waiting" | "error";
 
 const WATCHDOG_GRACE_MS = 2500;
-const HEARTBEAT_MS = 5 * 60 * 1000;
+const HEARTBEAT_MS = 10 * 60 * 1000;
 
 function localDateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
