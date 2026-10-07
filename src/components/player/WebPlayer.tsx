@@ -31,13 +31,66 @@ export default function WebPlayer({
   const [status, setStatus] = useState<PlayerStatus>("starting");
   const [online, setOnline] = useState(true);
   const [origin, setOrigin] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenNotice, setFullscreenNotice] = useState("");
 
+  const playerRootRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
   const manifestRef = useRef<PlayerManifest | null>(null);
   const preparingVersionRef = useRef<number | null>(null);
   const transitionLockRef = useRef(false);
   const watchdogRef = useRef<number | null>(null);
+
+  const toggleFullscreen = useCallback(async () => {
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+      msFullscreenElement?: Element | null;
+      msExitFullscreen?: () => Promise<void> | void;
+    };
+
+    const target = (playerRootRef.current || document.documentElement) as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+      msRequestFullscreen?: () => Promise<void> | void;
+    };
+
+    const fullscreenElement =
+      document.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.msFullscreenElement;
+
+    try {
+      if (fullscreenElement) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
+        return;
+      }
+
+      if (target.requestFullscreen) {
+        await target.requestFullscreen();
+      } else if (target.webkitRequestFullscreen) {
+        await target.webkitRequestFullscreen();
+      } else if (target.msRequestFullscreen) {
+        await target.msRequestFullscreen();
+      } else {
+        setFullscreenNotice(
+          "Este navegador da TV não libera tela cheia pelo site. Use o menu do navegador → Tela cheia."
+        );
+        window.setTimeout(() => setFullscreenNotice(""), 6000);
+      }
+    } catch {
+      setFullscreenNotice(
+        "A TV bloqueou a tela cheia automática. Pressione novamente ou use o menu do navegador."
+      );
+      window.setTimeout(() => setFullscreenNotice(""), 6000);
+    }
+  }, []);
 
   const clearWatchdog = useCallback(() => {
     if (watchdogRef.current !== null) {
@@ -162,8 +215,25 @@ export default function WebPlayer({
       5 * 60 * 1000
     );
 
+    const handleFullscreenChange = () => {
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element | null;
+        msFullscreenElement?: Element | null;
+      };
+
+      setIsFullscreen(
+        Boolean(
+          document.fullscreenElement ||
+            doc.webkitFullscreenElement ||
+            doc.msFullscreenElement
+        )
+      );
+    };
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
 
     return () => {
       active = false;
@@ -172,6 +242,8 @@ export default function WebPlayer({
       clearWatchdog();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
 
       for (const url of objectUrlsRef.current) {
         URL.revokeObjectURL(url);
@@ -289,7 +361,17 @@ export default function WebPlayer({
 
   if (!current || !manifest) {
     return (
-      <main className="tv">
+      <main className="tv" ref={playerRootRef}>
+        <button
+          type="button"
+          className="player-fullscreen-btn"
+          onClick={toggleFullscreen}
+        >
+          {isFullscreen ? "Sair da tela cheia" : "⛶ Tela cheia"}
+        </button>
+        {fullscreenNotice ? (
+          <div className="player-fullscreen-notice">{fullscreenNotice}</div>
+        ) : null}
         <div className="tv-ad">
           <div>
             <div className="eyebrow">TELALOCAL • WEB PLAYER</div>
@@ -316,7 +398,18 @@ export default function WebPlayer({
   const mediaKey = `${manifest.version}:${current.campaignId}:${playbackCycle}`;
 
   return (
-    <main className="player-root">
+    <main className="player-root" ref={playerRootRef}>
+      <button
+        type="button"
+        className="player-fullscreen-btn"
+        onClick={toggleFullscreen}
+      >
+        {isFullscreen ? "Sair da tela cheia" : "⛶ Tela cheia"}
+      </button>
+
+      {fullscreenNotice ? (
+        <div className="player-fullscreen-notice">{fullscreenNotice}</div>
+      ) : null}
       {current.mediaType === "image" ? (
         <img
           key={mediaKey}
