@@ -477,6 +477,47 @@ export default function WebPlayer({
         recordCompletedPlay(activeManifest, completedItem.campaignId);
       }
 
+      // Smart TVs mais antigas podem manter o frame final/preto quando existe
+      // somente um vídeo. Nesse caso reiniciamos o mesmo elemento de vídeo
+      // diretamente, sem desmontá-lo e sem depender de uma troca de playlist.
+      if (
+        activeItems.length === 1 &&
+        completedItem?.mediaType !== "image" &&
+        reason !== "error"
+      ) {
+        const video = videoRef.current;
+        const fallbackSeconds =
+          Number.isFinite(completedItem.durationSeconds) &&
+          completedItem.durationSeconds > 0
+            ? completedItem.durationSeconds
+            : 30;
+
+        if (video) {
+          try {
+            video.muted = true;
+            video.currentTime = 0;
+            void video.play().catch(() => {
+              // Fallback para browsers de TV que recusam o replay no mesmo nó.
+              setPlaybackCycle((value) => value + 1);
+            });
+          } catch {
+            setPlaybackCycle((value) => value + 1);
+          }
+        } else {
+          setPlaybackCycle((value) => value + 1);
+        }
+
+        watchdogRef.current = window.setTimeout(
+          () => advancePlayback("watchdog"),
+          Math.ceil(fallbackSeconds * 1000) + WATCHDOG_GRACE_MS
+        );
+
+        window.setTimeout(() => {
+          transitionLockRef.current = false;
+        }, 120);
+        return;
+      }
+
       setIndex((value) => (value + 1) % activeItems.length);
       setPlaybackCycle((value) => value + 1);
 
