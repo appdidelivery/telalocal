@@ -17,6 +17,7 @@ import { getTenantContext, type ScreenRecord } from "./screens";
 export type PairingAssignment = {
   screenId: string;
   playerKey: string;
+  pairingEpoch: number;
 };
 
 export type PairingRequest = {
@@ -27,6 +28,7 @@ export type PairingRequest = {
   expiresAtMs: number;
   screenId?: string;
   playerKey?: string;
+  pairingEpoch?: number;
 };
 
 const PAIRING_TTL_MS = 10 * 60 * 1000;
@@ -83,6 +85,7 @@ export function subscribeToPairing(
         onPaired({
           screenId: data.screenId,
           playerKey: data.playerKey,
+          pairingEpoch: Number(data.pairingEpoch ?? 1),
         });
       }
     },
@@ -139,6 +142,7 @@ export async function claimPairing(
     ownerUid: context.ownerUid,
     screenId: screen.id,
     playerKey: screen.playerKey,
+    pairingEpoch: Number(screen.pairingEpoch ?? 1),
     pairedAtMs: now,
   });
 }

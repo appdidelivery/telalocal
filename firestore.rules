@@ -145,6 +145,39 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /heartbeats/{screenId} {
+        allow read: if belongsToTenant(tenantId);
+
+        allow create, update: if request.resource.data.keys().hasOnly([
+            "tenantId",
+            "screenId",
+            "playerKey",
+            "playerState",
+            "currentCampaignId",
+            "currentCampaignName",
+            "manifestVersion",
+            "mediaCount",
+            "lastSeenAtMs",
+            "online",
+            "userAgent",
+            "viewport",
+            "appVersion"
+          ])
+          && request.resource.data.tenantId == tenantId
+          && request.resource.data.screenId == screenId
+          && request.resource.data.playerKey is string
+          && request.resource.data.playerState in [
+            "active",
+            "paused",
+            "waiting"
+          ]
+          && request.resource.data.lastSeenAtMs is int
+          && screenDoc(tenantId, screenId).data.playerKey
+            == request.resource.data.playerKey;
+
+        allow delete: if false;
+      }
+
       match /{document=**} {
         allow read: if belongsToTenant(tenantId);
 
@@ -195,6 +228,7 @@ service cloud.firestore {
           "ownerUid",
           "screenId",
           "playerKey",
+          "pairingEpoch",
           "pairedAtMs"
         ])
         && request.resource.data.pairId == resource.data.pairId
@@ -207,6 +241,7 @@ service cloud.firestore {
         && request.resource.data.pairedAtMs is int
         && request.resource.data.screenId is string
         && request.resource.data.playerKey is string
+        && request.resource.data.pairingEpoch is int
         && screenDoc(
           userTenantId(),
           request.resource.data.screenId
@@ -215,6 +250,10 @@ service cloud.firestore {
           userTenantId(),
           request.resource.data.screenId
         ).data.playerKey == request.resource.data.playerKey
+        && screenDoc(
+          userTenantId(),
+          request.resource.data.screenId
+        ).data.pairingEpoch == request.resource.data.pairingEpoch
         && screenDoc(
           userTenantId(),
           request.resource.data.screenId
@@ -253,6 +292,23 @@ service cloud.firestore {
         && request.resource.data.tenantId == resource.data.tenantId
         && request.resource.data.token == resource.data.token
         && belongsToTenant(resource.data.tenantId);
+
+      allow delete: if false;
+    }
+
+    match /networkInventory/{screenId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.screenId == screenId
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.tenantId == userTenantId();
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.tenantId == resource.data.tenantId
+        && request.resource.data.screenId == resource.data.screenId;
 
       allow delete: if false;
     }

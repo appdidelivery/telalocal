@@ -14,11 +14,18 @@ export type PlayerManifestItem = {
   mediaPath: string;
   mediaType?: "video" | "image";
   durationSeconds: number;
+  slotSeconds?: 15 | 30;
   transition?: "fade";
   conversionPath?: string;
   whatsappNumber?: string;
   couponCode?: string;
   offerText?: string;
+  scheduleEnabled?: boolean;
+  scheduleStartDate?: string;
+  scheduleEndDate?: string;
+  scheduleDays?: number[];
+  scheduleStartTime?: string;
+  scheduleEndTime?: string;
 };
 
 export type PlayerManifest = {
@@ -27,6 +34,9 @@ export type PlayerManifest = {
   tenantId: string;
   screenId: string;
   generatedAt: string;
+  playerStatus?: "active" | "paused";
+  pairingEpoch?: number;
+  syncNonce?: number;
   items: PlayerManifestItem[];
 };
 
@@ -115,6 +125,9 @@ export function subscribeToManifest(
         tenantId: String(data.tenantId ?? ""),
         screenId: String(data.screenId),
         generatedAt: String(data.generatedAt),
+        playerStatus: data.playerStatus === "paused" ? "paused" : "active",
+        pairingEpoch: Number(data.pairingEpoch ?? 1),
+        syncNonce: Number(data.syncNonce ?? 0),
         items: Array.isArray(data.items) ? data.items : [],
       });
     },

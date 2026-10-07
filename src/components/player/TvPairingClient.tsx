@@ -121,6 +121,8 @@ export default function TvPairingClient() {
         <WebPlayer
           screenId={assignment.screenId}
           playerKey={assignment.playerKey}
+          bindingEpoch={Number(assignment.pairingEpoch ?? 1)}
+          onRemoteUnpair={() => void beginPairing(true)}
         />
         <button
           type="button"
@@ -153,7 +155,10 @@ export default function TvPairingClient() {
               No celular ou computador, abra <strong>Painel → Parear TV</strong>,
               escolha a tela e informe este código.
             </p>
-            <small>Expira em {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}</small>
+            <small>
+              Expira em {Math.floor(secondsLeft / 60)}:
+              {String(secondsLeft % 60).padStart(2, "0")}
+            </small>
           </>
         ) : (
           <>

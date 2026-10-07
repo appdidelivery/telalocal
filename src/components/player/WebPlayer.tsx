@@ -11,18 +11,70 @@ import {
   subscribeToManifest,
   syncProofOfPlay,
   type PlayerManifest,
+  type PlayerManifestItem,
 } from "@/lib/player/offline";
+import { sendPlayerHeartbeat } from "@/lib/player/heartbeat";
 
 type PlayerStatus = "starting" | "ready" | "offline" | "waiting" | "error";
 
 const WATCHDOG_GRACE_MS = 2500;
+const HEARTBEAT_MS = 5 * 60 * 1000;
+
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+}
+
+function localTimeKey(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
+function isScheduledNow(item: PlayerManifestItem, now: Date) {
+  if (!item.scheduleEnabled) return true;
+
+  const date = localDateKey(now);
+  const time = localTimeKey(now);
+  const day = now.getDay();
+
+  if (item.scheduleStartDate && date < item.scheduleStartDate) return false;
+  if (item.scheduleEndDate && date > item.scheduleEndDate) return false;
+
+  if (item.scheduleDays?.length && !item.scheduleDays.includes(day)) {
+    return false;
+  }
+
+  const start = item.scheduleStartTime || "";
+  const end = item.scheduleEndTime || "";
+
+  if (start && end) {
+    if (start <= end) {
+      if (time < start || time > end) return false;
+    } else if (time < start && time > end) {
+      // Faixa atravessa meia-noite, por exemplo 18:00–02:00.
+      return false;
+    }
+  } else if (start && time < start) {
+    return false;
+  } else if (end && time > end) {
+    return false;
+  }
+
+  return true;
+}
 
 export default function WebPlayer({
   screenId,
   playerKey,
+  bindingEpoch,
+  onRemoteUnpair,
 }: {
   screenId: string;
   playerKey: string;
+  bindingEpoch?: number;
+  onRemoteUnpair?: () => void;
 }) {
   const [manifest, setManifest] = useState<PlayerManifest | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -31,6 +83,7 @@ export default function WebPlayer({
   const [status, setStatus] = useState<PlayerStatus>("starting");
   const [online, setOnline] = useState(true);
   const [origin, setOrigin] = useState("");
+  const [clock, setClock] = useState(() => Date.now());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenControlExpanded, setFullscreenControlExpanded] = useState(true);
   const [fullscreenNotice, setFullscreenNotice] = useState("");
@@ -39,6 +92,9 @@ export default function WebPlayer({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
   const manifestRef = useRef<PlayerManifest | null>(null);
+  const eligibleItemsRef = useRef<PlayerManifestItem[]>([]);
+  const currentCampaignRef = useRef("");
+  const currentCampaignNameRef = useRef("");
   const preparingVersionRef = useRef<number | null>(null);
   const transitionLockRef = useRef(false);
   const watchdogRef = useRef<number | null>(null);
@@ -121,8 +177,43 @@ export default function WebPlayer({
     }
   }, []);
 
+  const sendHeartbeatNow = useCallback(async () => {
+    const currentManifest = manifestRef.current;
+    if (!currentManifest || !navigator.onLine) return;
+
+    const playerState =
+      currentManifest.playerStatus === "paused"
+        ? "paused"
+        : eligibleItemsRef.current.length > 0
+          ? "active"
+          : "waiting";
+
+    try {
+      await sendPlayerHeartbeat({
+        tenantId: currentManifest.tenantId,
+        screenId,
+        playerKey,
+        playerState,
+        currentCampaignId: currentCampaignRef.current,
+        currentCampaignName: currentCampaignNameRef.current,
+        manifestVersion: currentManifest.version,
+        mediaCount: eligibleItemsRef.current.length,
+      });
+    } catch {
+      // Heartbeat operacional nunca interfere na reprodução.
+    }
+  }, [playerKey, screenId]);
+
   const preparePlayback = useCallback(
     async (nextManifest: PlayerManifest) => {
+      if (
+        bindingEpoch !== undefined &&
+        Number(nextManifest.pairingEpoch ?? 1) > bindingEpoch
+      ) {
+        onRemoteUnpair?.();
+        return;
+      }
+
       if (
         manifestRef.current?.version === nextManifest.version ||
         preparingVersionRef.current === nextManifest.version
@@ -164,11 +255,13 @@ export default function WebPlayer({
         setIndex(0);
         setPlaybackCycle((value) => value + 1);
         setStatus(navigator.onLine ? "ready" : "offline");
+
+        window.setTimeout(() => void sendHeartbeatNow(), 250);
       } finally {
         preparingVersionRef.current = null;
       }
     },
-    [clearWatchdog]
+    [bindingEpoch, clearWatchdog, onRemoteUnpair, sendHeartbeatNow]
   );
 
   const trySyncProof = useCallback(
@@ -225,6 +318,7 @@ export default function WebPlayer({
       setOnline(true);
       setStatus(manifestRef.current ? "ready" : "starting");
       void trySyncProof(false);
+      void sendHeartbeatNow();
     };
 
     const handleOffline = () => {
@@ -235,6 +329,16 @@ export default function WebPlayer({
     const proofInterval = window.setInterval(
       () => void trySyncProof(false),
       5 * 60 * 1000
+    );
+
+    const heartbeatInterval = window.setInterval(
+      () => void sendHeartbeatNow(),
+      HEARTBEAT_MS
+    );
+
+    const scheduleClock = window.setInterval(
+      () => setClock(Date.now()),
+      60 * 1000
     );
 
     const handleFullscreenChange = () => {
@@ -265,12 +369,17 @@ export default function WebPlayer({
     window.addEventListener("touchstart", revealFullscreenControl);
     window.addEventListener("keydown", revealFullscreenControl);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
+    document.addEventListener(
+      "webkitfullscreenchange",
+      handleFullscreenChange as EventListener
+    );
 
     return () => {
       active = false;
       unsubscribe();
       window.clearInterval(proofInterval);
+      window.clearInterval(heartbeatInterval);
+      window.clearInterval(scheduleClock);
       clearWatchdog();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -279,7 +388,10 @@ export default function WebPlayer({
       window.removeEventListener("keydown", revealFullscreenControl);
       clearFullscreenControlTimer();
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange as EventListener);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange as EventListener
+      );
 
       for (const url of objectUrlsRef.current) {
         URL.revokeObjectURL(url);
@@ -292,13 +404,37 @@ export default function WebPlayer({
     revealFullscreenControl,
     scheduleFullscreenControlCompact,
     screenId,
+    sendHeartbeatNow,
     trySyncProof,
   ]);
 
+  const eligibleItems = useMemo(() => {
+    if (!manifest?.items.length) return [];
+    const now = new Date(clock);
+    return manifest.items.filter((item) => isScheduledNow(item, now));
+  }, [clock, manifest]);
+
+  const eligibleSignature = useMemo(
+    () => eligibleItems.map((item) => item.campaignId).join("|"),
+    [eligibleItems]
+  );
+
+  useEffect(() => {
+    eligibleItemsRef.current = eligibleItems;
+    setIndex((value) =>
+      eligibleItems.length ? value % eligibleItems.length : 0
+    );
+  }, [eligibleItems, eligibleSignature]);
+
   const current = useMemo(() => {
-    if (!manifest?.items.length) return null;
-    return manifest.items[index % manifest.items.length];
-  }, [index, manifest]);
+    if (!eligibleItems.length) return null;
+    return eligibleItems[index % eligibleItems.length];
+  }, [eligibleItems, index]);
+
+  useEffect(() => {
+    currentCampaignRef.current = current?.campaignId ?? "";
+    currentCampaignNameRef.current = current?.name ?? "";
+  }, [current?.campaignId, current?.name]);
 
   const recordCompletedPlay = useCallback(
     (completedManifest: PlayerManifest, campaignId: string) => {
@@ -321,19 +457,27 @@ export default function WebPlayer({
   const advancePlayback = useCallback(
     (reason: "ended" | "watchdog" | "error") => {
       const activeManifest = manifestRef.current;
-      if (!activeManifest?.items.length || transitionLockRef.current) return;
+      const activeItems = eligibleItemsRef.current;
+
+      if (
+        !activeManifest ||
+        !activeItems.length ||
+        transitionLockRef.current
+      ) {
+        return;
+      }
 
       transitionLockRef.current = true;
       clearWatchdog();
 
-      const activeIndex = index % activeManifest.items.length;
-      const completedItem = activeManifest.items[activeIndex];
+      const activeIndex = index % activeItems.length;
+      const completedItem = activeItems[activeIndex];
 
       if (reason !== "error" && completedItem) {
         recordCompletedPlay(activeManifest, completedItem.campaignId);
       }
 
-      setIndex((value) => (value + 1) % activeManifest.items.length);
+      setIndex((value) => (value + 1) % activeItems.length);
       setPlaybackCycle((value) => value + 1);
 
       window.setTimeout(() => {
@@ -346,11 +490,11 @@ export default function WebPlayer({
   const armWatchdog = useCallback(() => {
     clearWatchdog();
 
-    const activeManifest = manifestRef.current;
-    if (!activeManifest?.items.length) return;
+    const activeItems = eligibleItemsRef.current;
+    if (!activeItems.length) return;
 
-    const activeIndex = index % activeManifest.items.length;
-    const item = activeManifest.items[activeIndex];
+    const activeIndex = index % activeItems.length;
+    const item = activeItems[activeIndex];
     const fallbackSeconds =
       Number.isFinite(item?.durationSeconds) && item.durationSeconds > 0
         ? item.durationSeconds
@@ -364,7 +508,7 @@ export default function WebPlayer({
   }, [advancePlayback, clearWatchdog, index]);
 
   useEffect(() => {
-    if (!current) return;
+    if (!current || manifest?.playerStatus === "paused") return;
 
     if (current.mediaType === "image") {
       armWatchdog();
@@ -393,9 +537,11 @@ export default function WebPlayer({
       cancelled = true;
       clearWatchdog();
     };
-  }, [armWatchdog, clearWatchdog, current, playbackCycle]);
+  }, [armWatchdog, clearWatchdog, current, manifest?.playerStatus, playbackCycle]);
 
   const handleCanPlay = useCallback(() => {
+    if (manifestRef.current?.playerStatus === "paused") return;
+
     const video = videoRef.current;
     if (!video) return;
 
@@ -403,21 +549,44 @@ export default function WebPlayer({
     void video.play().then(armWatchdog).catch(() => undefined);
   }, [armWatchdog]);
 
-  if (!current || !manifest) {
+  const fullscreenButton = (
+    <button
+      type="button"
+      className={`player-fullscreen-btn${
+        isFullscreen && !fullscreenControlExpanded ? " compact" : ""
+      }`}
+      onClick={toggleFullscreen}
+      title={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
+      aria-label={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
+    >
+      <span className="fullscreen-icon">⛶</span>
+      <span className="fullscreen-label">
+        {isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+      </span>
+    </button>
+  );
+
+  if (manifest?.playerStatus === "paused") {
     return (
       <main className="tv" ref={playerRootRef}>
-        <button
-          type="button"
-          className={`player-fullscreen-btn${isFullscreen && !fullscreenControlExpanded ? " compact" : ""}`}
-          onClick={toggleFullscreen}
-          title={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
-          aria-label={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
-        >
-          <span className="fullscreen-icon">⛶</span>
-          <span className="fullscreen-label">
-            {isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
-          </span>
-        </button>
+        {fullscreenButton}
+        <div className="tv-ad">
+          <div>
+            <div className="eyebrow">TELALOCAL • TELA PAUSADA</div>
+            <h1>Exibição pausada remotamente.</h1>
+            <p>O conteúdo volta automaticamente quando a tela for reativada no painel.</p>
+            <small className="player-id">Tela: {screenId}</small>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!manifest || !current) {
+    const hasManifest = Boolean(manifest);
+    return (
+      <main className="tv" ref={playerRootRef}>
+        {fullscreenButton}
         {fullscreenNotice ? (
           <div className="player-fullscreen-notice">{fullscreenNotice}</div>
         ) : null}
@@ -425,14 +594,18 @@ export default function WebPlayer({
           <div>
             <div className="eyebrow">TELALOCAL • WEB PLAYER</div>
             <h1>
-              {status === "waiting"
-                ? "Aguardando playlist."
-                : "Preparando player..."}
+              {hasManifest
+                ? "Nenhuma campanha programada agora."
+                : status === "waiting"
+                  ? "Aguardando playlist."
+                  : "Preparando player..."}
             </h1>
             <p>
-              {online
-                ? "Quando uma playlist for publicada, ela será carregada nesta tela."
-                : "Sem conexão e ainda não há uma playlist salva neste aparelho."}
+              {hasManifest
+                ? "A tela retomará automaticamente quando entrar no horário de uma campanha."
+                : online
+                  ? "Quando uma playlist for publicada, ela será carregada nesta tela."
+                  : "Sem conexão e ainda não há uma playlist salva neste aparelho."}
             </p>
             <small className="player-id">Tela: {screenId}</small>
           </div>
@@ -448,22 +621,12 @@ export default function WebPlayer({
 
   return (
     <main className="player-root" ref={playerRootRef}>
-      <button
-        type="button"
-        className={`player-fullscreen-btn${isFullscreen && !fullscreenControlExpanded ? " compact" : ""}`}
-        onClick={toggleFullscreen}
-        title={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
-        aria-label={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
-      >
-        <span className="fullscreen-icon">⛶</span>
-        <span className="fullscreen-label">
-          {isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
-        </span>
-      </button>
+      {fullscreenButton}
 
       {fullscreenNotice ? (
         <div className="player-fullscreen-notice">{fullscreenNotice}</div>
       ) : null}
+
       {current.mediaType === "image" ? (
         <img
           key={mediaKey}

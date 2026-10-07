@@ -12,6 +12,7 @@ import {
 import { db } from "./client";
 import { getTenantContext, listScreens, type ScreenRecord } from "./screens";
 import type { CampaignRecord } from "./campaigns";
+import { PLAN_LIMITS } from "@/lib/plans";
 
 export type PlayerManifestItem = {
   campaignId: string;
@@ -21,11 +22,18 @@ export type PlayerManifestItem = {
   mediaPath: string;
   mediaType: "video" | "image";
   durationSeconds: number;
+  slotSeconds?: 15 | 30;
   transition: "fade";
   conversionPath?: string;
   whatsappNumber?: string;
   couponCode?: string;
   offerText?: string;
+  scheduleEnabled?: boolean;
+  scheduleStartDate?: string;
+  scheduleEndDate?: string;
+  scheduleDays?: number[];
+  scheduleStartTime?: string;
+  scheduleEndTime?: string;
 };
 
 export type PlayerManifest = {
@@ -34,6 +42,9 @@ export type PlayerManifest = {
   tenantId: string;
   screenId: string;
   generatedAt: string;
+  playerStatus: "active" | "paused";
+  pairingEpoch: number;
+  syncNonce: number;
   items: PlayerManifestItem[];
 };
 
@@ -47,6 +58,47 @@ function conversionToken(screen: ScreenRecord, campaign: CampaignRecord) {
     .toLowerCase();
 
   return `${screenPart}${campaignPart}`;
+}
+
+function normalized(value?: string) {
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR");
+}
+
+function digitsOnly(value?: string) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+export function campaignMatchesScreen(
+  campaign: CampaignRecord,
+  screen: ScreenRecord
+) {
+  const mode = campaign.targetMode ?? "all";
+
+  if (mode === "all") return true;
+
+  if (mode === "category") {
+    return (campaign.targetCategories ?? []).some(
+      (value) => normalized(value) === normalized(screen.category)
+    );
+  }
+
+  if (mode === "city") {
+    return (campaign.targetCities ?? []).some(
+      (value) => normalized(value) === normalized(screen.city)
+    );
+  }
+
+  if (mode === "zip") {
+    return (campaign.targetZipCodes ?? []).some(
+      (value) => digitsOnly(value) === digitsOnly(screen.zipCode)
+    );
+  }
+
+  if (mode === "screens") {
+    return (campaign.targetScreenIds ?? []).includes(screen.id);
+  }
+
+  return false;
 }
 
 export async function loadPlaylistEditorData(): Promise<{
@@ -82,6 +134,15 @@ export async function publishPlaylist(
     });
   }
 
+  if (campaigns.length > PLAN_LIMITS.pilot.playlistItems) {
+    throw Object.assign(
+      new Error(
+        `O plano piloto permite até ${PLAN_LIMITS.pilot.playlistItems} mídias por playlist.`
+      ),
+      { code: "playlist/plan-limit" }
+    );
+  }
+
   const context = await getTenantContext();
   const version = Date.now();
 
@@ -94,13 +155,21 @@ export async function publishPlaylist(
       advertiserName: campaign.advertiserName,
       mediaUrl: campaign.mediaUrl,
       mediaPath: campaign.mediaPath,
-      mediaType: campaign.mediaType === "image" ? "image" as const : "video" as const,
+      mediaType:
+        campaign.mediaType === "image" ? ("image" as const) : ("video" as const),
       durationSeconds: campaign.durationSeconds,
+      slotSeconds: campaign.slotSeconds,
       transition: "fade" as const,
       conversionPath: `/r/${token}`,
       whatsappNumber: campaign.whatsappNumber || "",
       couponCode: campaign.couponCode || "",
       offerText: campaign.offerText || "",
+      scheduleEnabled: Boolean(campaign.scheduleEnabled),
+      scheduleStartDate: campaign.scheduleStartDate || "",
+      scheduleEndDate: campaign.scheduleEndDate || "",
+      scheduleDays: campaign.scheduleDays || [],
+      scheduleStartTime: campaign.scheduleStartTime || "",
+      scheduleEndTime: campaign.scheduleEndTime || "",
     };
   });
 
@@ -110,6 +179,9 @@ export async function publishPlaylist(
     tenantId: context.tenantId,
     screenId: screen.id,
     generatedAt: new Date().toISOString(),
+    playerStatus: screen.status === "paused" ? "paused" : "active",
+    pairingEpoch: Number(screen.pairingEpoch ?? 1),
+    syncNonce: version,
     items: manifestItems,
   };
 
@@ -120,13 +192,7 @@ export async function publishPlaylist(
     "playlists",
     screen.id
   );
-  const screenRef = doc(
-    db,
-    "tenants",
-    context.tenantId,
-    "screens",
-    screen.id
-  );
+  const screenRef = doc(db, "tenants", context.tenantId, "screens", screen.id);
   const publicManifestRef = doc(db, "playerManifests", screen.id);
 
   const batch = writeBatch(db);
@@ -188,4 +254,24 @@ export async function publishPlaylist(
   await batch.commit();
 
   return manifest;
+}
+
+export async function publishSegmentedPlaylists(
+  screens: ScreenRecord[],
+  campaigns: CampaignRecord[]
+) {
+  const results: Array<{ screenId: string; count: number }> = [];
+
+  for (const screen of screens) {
+    const matches = campaigns.filter((campaign) =>
+      campaignMatchesScreen(campaign, screen)
+    );
+
+    if (matches.length === 0) continue;
+
+    await publishPlaylist(screen, matches.slice(0, PLAN_LIMITS.pilot.playlistItems));
+    results.push({ screenId: screen.id, count: matches.length });
+  }
+
+  return results;
 }

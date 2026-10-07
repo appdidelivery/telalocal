@@ -16,9 +16,12 @@ import {
   uploadImageToCloudinary,
   uploadVideoToCloudinary,
 } from "@/lib/media/cloudinary";
+import { PLAN_LIMITS } from "@/lib/plans";
 
-export const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
-export const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = PLAN_LIMITS.pilot.videoBytes;
+export const MAX_IMAGE_BYTES = PLAN_LIMITS.pilot.imageBytes;
+
+export type CampaignTargetMode = "all" | "category" | "city" | "zip" | "screens";
 
 export type CampaignRecord = {
   id: string;
@@ -33,10 +36,22 @@ export type CampaignRecord = {
   fileName: string;
   sizeBytes: number;
   durationSeconds: number;
+  slotSeconds?: 15 | 30;
   whatsappNumber?: string;
   couponCode?: string;
   offerText?: string;
   trackingEnabled?: boolean;
+  scheduleEnabled?: boolean;
+  scheduleStartDate?: string;
+  scheduleEndDate?: string;
+  scheduleDays?: number[];
+  scheduleStartTime?: string;
+  scheduleEndTime?: string;
+  targetMode?: CampaignTargetMode;
+  targetCategories?: string[];
+  targetCities?: string[];
+  targetZipCodes?: string[];
+  targetScreenIds?: string[];
   status: "active";
   ownerUid: string;
   tenantId: string;
@@ -64,8 +79,27 @@ export type CreateImageCampaignInput = {
   offerText?: string;
 };
 
+export type CampaignDeliveryInput = {
+  slotSeconds: 15 | 30;
+  scheduleEnabled: boolean;
+  scheduleStartDate?: string;
+  scheduleEndDate?: string;
+  scheduleDays?: number[];
+  scheduleStartTime?: string;
+  scheduleEndTime?: string;
+  targetMode: CampaignTargetMode;
+  targetCategories?: string[];
+  targetCities?: string[];
+  targetZipCodes?: string[];
+  targetScreenIds?: string[];
+};
+
 function digitsOnly(value?: string) {
   return String(value ?? "").replace(/\D/g, "");
+}
+
+function cleanList(values?: string[]) {
+  return (values ?? []).map((value) => value.trim()).filter(Boolean);
 }
 
 function normalizedTracking(input: {
@@ -85,11 +119,30 @@ function normalizedTracking(input: {
   };
 }
 
+function defaultDelivery(durationSeconds: number) {
+  return {
+    slotSeconds: (durationSeconds <= 15 ? 15 : 30) as 15 | 30,
+    scheduleEnabled: false,
+    scheduleStartDate: "",
+    scheduleEndDate: "",
+    scheduleDays: [] as number[],
+    scheduleStartTime: "",
+    scheduleEndTime: "",
+    targetMode: "all" as CampaignTargetMode,
+    targetCategories: [] as string[],
+    targetCities: [] as string[],
+    targetZipCodes: [] as string[],
+    targetScreenIds: [] as string[],
+  };
+}
+
 export async function listCampaigns(): Promise<CampaignRecord[]> {
   const context = await getTenantContext();
-  const campaignsRef = collection(db, "tenants", context.tenantId, "campaigns");
   const snapshot = await getDocs(
-    query(campaignsRef, where("ownerUid", "==", context.ownerUid))
+    query(
+      collection(db, "tenants", context.tenantId, "campaigns"),
+      where("ownerUid", "==", context.ownerUid)
+    )
   );
 
   return snapshot.docs
@@ -131,6 +184,7 @@ export async function createCampaign(
       : input.durationSeconds;
 
   const tracking = normalizedTracking(input);
+  const delivery = defaultDelivery(durationSeconds);
 
   const record = {
     tenantId: context.tenantId,
@@ -146,6 +200,7 @@ export async function createCampaign(
     sizeBytes: upload.bytes || input.file.size,
     durationSeconds: Math.round(durationSeconds * 10) / 10,
     ...tracking,
+    ...delivery,
     status: "active" as const,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -153,11 +208,7 @@ export async function createCampaign(
 
   await setDoc(campaignRef, record);
 
-  return {
-    id: campaignRef.id,
-    ...record,
-    createdAt: undefined,
-  };
+  return { id: campaignRef.id, ...record, createdAt: undefined };
 }
 
 export async function createImageCampaign(
@@ -171,10 +222,9 @@ export async function createImageCampaign(
   }
 
   if (input.file.size > MAX_IMAGE_BYTES) {
-    throw Object.assign(
-      new Error("A imagem deve ter no máximo 12 MB."),
-      { code: "media/file-too-large" }
-    );
+    throw Object.assign(new Error("A imagem deve ter no máximo 12 MB."), {
+      code: "media/file-too-large",
+    });
   }
 
   const context = await getTenantContext();
@@ -190,6 +240,7 @@ export async function createImageCampaign(
 
   const tracking = normalizedTracking(input);
   const durationSeconds = Math.max(4, Math.min(30, input.durationSeconds || 8));
+  const delivery = defaultDelivery(durationSeconds);
 
   const record = {
     tenantId: context.tenantId,
@@ -206,6 +257,7 @@ export async function createImageCampaign(
     sizeBytes: upload.bytes || input.file.size,
     durationSeconds,
     ...tracking,
+    ...delivery,
     status: "active" as const,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -213,11 +265,7 @@ export async function createImageCampaign(
 
   await setDoc(campaignRef, record);
 
-  return {
-    id: campaignRef.id,
-    ...record,
-    createdAt: undefined,
-  };
+  return { id: campaignRef.id, ...record, createdAt: undefined };
 }
 
 export async function updateCampaignTracking(
@@ -233,11 +281,39 @@ export async function updateCampaignTracking(
 
   await updateDoc(
     doc(db, "tenants", context.tenantId, "campaigns", campaignId),
-    {
-      ...tracking,
-      updatedAt: serverTimestamp(),
-    }
+    { ...tracking, updatedAt: serverTimestamp() }
   );
 
   return tracking;
+}
+
+export async function updateCampaignDelivery(
+  campaignId: string,
+  input: CampaignDeliveryInput
+) {
+  const context = await getTenantContext();
+
+  const delivery = {
+    slotSeconds: input.slotSeconds,
+    scheduleEnabled: Boolean(input.scheduleEnabled),
+    scheduleStartDate: String(input.scheduleStartDate ?? ""),
+    scheduleEndDate: String(input.scheduleEndDate ?? ""),
+    scheduleDays: (input.scheduleDays ?? []).filter(
+      (day) => Number.isInteger(day) && day >= 0 && day <= 6
+    ),
+    scheduleStartTime: String(input.scheduleStartTime ?? ""),
+    scheduleEndTime: String(input.scheduleEndTime ?? ""),
+    targetMode: input.targetMode,
+    targetCategories: cleanList(input.targetCategories),
+    targetCities: cleanList(input.targetCities),
+    targetZipCodes: cleanList(input.targetZipCodes).map(digitsOnly),
+    targetScreenIds: cleanList(input.targetScreenIds),
+  };
+
+  await updateDoc(
+    doc(db, "tenants", context.tenantId, "campaigns", campaignId),
+    { ...delivery, updatedAt: serverTimestamp() }
+  );
+
+  return delivery;
 }

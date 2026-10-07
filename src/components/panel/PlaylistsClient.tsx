@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase/client";
 import {
   loadPlaylistEditorData,
   publishPlaylist,
+  publishSegmentedPlaylists,
 } from "@/lib/firebase/playlists";
 import type { ScreenRecord } from "@/lib/firebase/screens";
 import type { CampaignRecord } from "@/lib/firebase/campaigns";
@@ -70,6 +71,41 @@ export default function PlaylistsClient() {
     });
   }
 
+  async function handleSegmentedPublish() {
+    setError("");
+    setMessage("");
+
+    if (screens.length === 0 || campaigns.length === 0) {
+      setError("Cadastre telas e campanhas antes de publicar por segmentação.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Publicar automaticamente em todas as telas conforme a segmentação configurada? Isso substitui a playlist atual das telas alcançadas."
+      )
+    ) {
+      return;
+    }
+
+    setPublishing(true);
+
+    try {
+      const result = await publishSegmentedPlaylists(screens, campaigns);
+      const totalMedia = result.reduce((sum, item) => sum + item.count, 0);
+
+      setMessage(
+        result.length
+          ? `Segmentação publicada em ${result.length} tela(s), com ${totalMedia} encaixe(s) de campanha.`
+          : "Nenhuma tela corresponde às segmentações atuais."
+      );
+    } catch {
+      setError("Não foi possível publicar a segmentação.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   async function handlePublish() {
     setError("");
     setMessage("");
@@ -118,10 +154,13 @@ export default function PlaylistsClient() {
           <div className="eyebrow">GRADE DE PROGRAMAÇÃO</div>
           <h1>Playlists</h1>
           <p className="muted">
-            Escolha uma tela, selecione as campanhas e publique uma nova versão do manifesto.
+            Monte manualmente uma tela ou distribua automaticamente conforme categoria, cidade, CEP e telas específicas.
           </p>
         </div>
-        <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
+        <div className="screen-actions">
+          <Link className="btn ghost" href="/painel/planejamento">Agendamento e segmentação</Link>
+          <Link className="btn ghost" href="/painel">← Voltar ao painel</Link>
+        </div>
       </div>
 
       <div className="playlist-layout">
@@ -171,7 +210,7 @@ export default function PlaylistsClient() {
                     <span>
                       <strong>{campaign.name}</strong>
                       <small>
-                        {campaign.advertiserName} · {campaign.durationSeconds}s
+                        {campaign.advertiserName} · {campaign.durationSeconds}s · alvo: {campaign.targetMode || "all"}
                       </small>
                     </span>
                   </label>
@@ -228,7 +267,16 @@ export default function PlaylistsClient() {
             onClick={handlePublish}
             disabled={publishing || !screenId || selectedCampaigns.length === 0}
           >
-            {publishing ? "Publicando..." : "Publicar playlist na TV"}
+            {publishing ? "Publicando..." : "Publicar playlist nesta TV"}
+          </button>
+
+          <button
+            className="btn ghost full playlist-segmented-btn"
+            type="button"
+            onClick={handleSegmentedPublish}
+            disabled={publishing || screens.length === 0 || campaigns.length === 0}
+          >
+            Publicar segmentação em todas as telas
           </button>
         </section>
       </div>
