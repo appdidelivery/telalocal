@@ -1,0 +1,19 @@
+<svg width="1024" height="280" viewBox="0 0 1024 280" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<title id="title">TelaLocal</title><desc id="desc">Tela digital com marcador de localização e sinal de transmissão.</desc>
+<defs>
+  <linearGradient id="screen" x1="56" y1="68" x2="250" y2="210" gradientUnits="userSpaceOnUse"><stop stop-color="#0B2E63"/><stop offset="1" stop-color="#087FB0"/></linearGradient>
+  <linearGradient id="accent" x1="120" y1="85" x2="228" y2="205" gradientUnits="userSpaceOnUse"><stop stop-color="#23D08A"/><stop offset="1" stop-color="#0AA6A6"/></linearGradient>
+  <linearGradient id="word" x1="485" y1="0" x2="930" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#0A9EAE"/><stop offset="1" stop-color="#27C66F"/></linearGradient>
+</defs>
+<rect x="46" y="54" width="220" height="158" rx="24" fill="#082B5C"/>
+<rect x="60" y="68" width="192" height="130" rx="15" fill="url(#screen)"/>
+<path d="M61 172C98 151 126 153 150 168C174 183 198 181 252 137V198H61V172Z" fill="#14A7A5" opacity=".9"/>
+<path d="M157 92C128 92 105 114 105 142C105 177 157 207 157 207C157 207 209 177 209 142C209 114 186 92 157 92Z" fill="url(#accent)"/>
+<circle cx="157" cy="139" r="17" fill="white"/>
+<path d="M92 214H220L236 232H76L92 214Z" fill="#082B5C"/>
+<path d="M259 71C290 72 313 95 314 126" stroke="#27C66F" stroke-width="14" stroke-linecap="round"/>
+<path d="M260 97C277 98 289 110 290 127" stroke="#18B89B" stroke-width="14" stroke-linecap="round"/>
+<path d="M260 123C265 124 268 127 268 132" stroke="#0AA6A6" stroke-width="14" stroke-linecap="round"/>
+<text x="352" y="178" font-family="Arial, Helvetica, sans-serif" font-size="118" font-weight="800" letter-spacing="-6" fill="#082B5C">Tela</text>
+<text x="588" y="178" font-family="Arial, Helvetica, sans-serif" font-size="118" font-weight="800" letter-spacing="-6" fill="url(#word)">Local</text>
+</svg>
