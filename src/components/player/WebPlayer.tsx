@@ -99,6 +99,7 @@ export default function WebPlayer({
   const transitionLockRef = useRef(false);
   const watchdogRef = useRef<number | null>(null);
   const fullscreenControlTimerRef = useRef<number | null>(null);
+  const stallRecoveryTimerRef = useRef<number | null>(null);
 
   const clearFullscreenControlTimer = useCallback(() => {
     if (fullscreenControlTimerRef.current !== null) {
@@ -169,6 +170,51 @@ export default function WebPlayer({
       window.setTimeout(() => setFullscreenNotice(""), 6000);
     }
   }, []);
+
+  const clearStallRecovery = useCallback(() => {
+    if (stallRecoveryTimerRef.current !== null) {
+      window.clearTimeout(stallRecoveryTimerRef.current);
+      stallRecoveryTimerRef.current = null;
+    }
+  }, []);
+
+  const recoverStalledVideo = useCallback(() => {
+    clearStallRecovery();
+
+    stallRecoveryTimerRef.current = window.setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || manifestRef.current?.playerStatus === "paused") return;
+
+      try {
+        const time = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+        video.muted = true;
+
+        if (video.readyState < 3 || video.paused) {
+          video.load();
+
+          const restore = () => {
+            try {
+              if (time > 0 && Number.isFinite(video.duration) && time < video.duration) {
+                video.currentTime = time;
+              }
+            } catch {}
+
+            void video.play().catch(() => {
+              setPlaybackCycle((value) => value + 1);
+            });
+          };
+
+          if (video.readyState >= 2) {
+            restore();
+          } else {
+            video.addEventListener("loadeddata", restore, { once: true });
+          }
+        }
+      } catch {
+        setPlaybackCycle((value) => value + 1);
+      }
+    }, 4500);
+  }, [clearStallRecovery]);
 
   const clearWatchdog = useCallback(() => {
     if (watchdogRef.current !== null) {
@@ -381,6 +427,7 @@ export default function WebPlayer({
       window.clearInterval(heartbeatInterval);
       window.clearInterval(scheduleClock);
       clearWatchdog();
+      clearStallRecovery();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("pointermove", revealFullscreenControl);
@@ -399,6 +446,7 @@ export default function WebPlayer({
     };
   }, [
     clearFullscreenControlTimer,
+    clearStallRecovery,
     clearWatchdog,
     preparePlayback,
     revealFullscreenControl,
@@ -689,9 +737,15 @@ export default function WebPlayer({
           preload="auto"
           onLoadedData={handleCanPlay}
           onCanPlay={handleCanPlay}
-          onPlaying={armWatchdog}
+          onPlaying={() => {
+            clearStallRecovery();
+            armWatchdog();
+          }}
+          onStalled={recoverStalledVideo}
+          onWaiting={recoverStalledVideo}
           onEnded={() => advancePlayback("ended")}
           onError={() => {
+            clearStallRecovery();
             window.setTimeout(() => advancePlayback("error"), 800);
           }}
         />
